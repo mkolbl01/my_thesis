@@ -68,7 +68,7 @@ The 2-loop calculation is self-contained.
 ```
 my_thesis/
 ├── one-loop/
-│   ├── code/
+│   ├── codes/
 │   ├── data/
 │   └── results/
 │
