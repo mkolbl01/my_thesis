@@ -1,0 +1,105 @@
+
+
+# This code creates a table with all masters that are present in the bubble reduction
+
+#kernelopts(numcpus=8):
+
+read "codes/evaluation_bubble.map":
+
+read "data/pk_fid_maple_input.txt":
+
+
+
+forget(all):
+
+Digits := 20:
+
+Kuv0 := 1/10000:
+Kuv1 := 69/1000:
+Kuv2 := 41/5000:
+Kuv3 := 13/10000:
+Kuv4 := 27/2000000:
+Kpeak1 := -17/500:
+Kpeak2 := -1/1000:
+Kpeak3 := -19/250000:
+Kpeak4 := -39/2500000:
+
+
+Ma1 := - Kpeak1 - I*Kuv1:
+Ma1c := - Kpeak1 + I*Kuv1: 
+Ma2 := - Kpeak2 - I*Kuv2:
+Ma2c := - Kpeak2 + I*Kuv2:
+Ma3 := - Kpeak3 - I*Kuv3:
+Ma3c := - Kpeak3 + I*Kuv3:
+Ma4 := - Kpeak4 - I*Kuv4:
+Ma4c := - Kpeak4 + I*Kuv4:
+Ma0 := Kuv0:
+
+mass := [Ma0, Ma1, Ma1c, Ma2, Ma2c, Ma3, Ma3c, Ma4, Ma4c, 0]:
+
+masspairs := [seq(seq([mass[i], mass[j]], j=1..nops(mass)), i=1..nops(mass))]:
+
+
+
+allbubblemasters := proc(k_val)
+ local T, kval, pair:
+
+ T := table():
+
+ for kval in k_val do
+  for pair in masspairs do
+   T[op(pair), kval^2] := (((Pi)^(3/2)/(2*Pi)^3))*Bubble_master(pair[1], pair[2], kval^2):
+  od:
+ od:
+
+ return T:
+end proc:
+
+
+alltadpolemasters := proc()
+ local T, m:
+
+ T := table():
+
+ for m in mass do
+   if m <> 0 then
+     T[m] := ((Pi)^(3/2)/(2*Pi)^3)*Tad_master(m):
+   fi:
+ od:
+
+ return T:
+
+end proc:
+
+
+
+
+generate_masters := proc(kval)
+ 
+ return tablemerge(allbubblemasters(kval), alltadpolemasters(), inplace = true):
+
+end proc:
+
+
+
+evaluate_masters := proc(nu1, nu2, M1, M2, Q)
+ local master:
+
+ if nu1 = 1 and nu2 = 1 then
+  print("encountered bubble master"):
+  return AllBubMasters[M1, M2, Q]:
+ elif nu1 = 0 then
+  return AllTadMasters[M2]:
+ elif nu2 = 0 then
+  return AllTadMasters[M1]:
+ fi: 
+
+end proc:
+
+
+ex_mom := momentum:
+
+AllTadMasters := alltadpolemasters():
+AllBubMasters := allbubblemasters(ex_mom):
+
+

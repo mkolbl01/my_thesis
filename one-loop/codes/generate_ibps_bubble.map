@@ -1,0 +1,112 @@
+ 
+forget(all):
+
+
+integrand := proc(n1, n2) 
+
+ return 1/(((k+q)^2 + M1)^n1*(q^2 + M2)^n2):
+
+end proc:
+
+
+prop_integrand := proc(n1, n2)
+
+ return 1/(B1^n1*B2^n2):
+
+end proc: 
+
+
+props := {B1 = kk + 2*kq + qq + M1, B2 = qq + M2}:
+
+products := {kq, q^2}:
+
+rule1 := [q^2 = qq]:
+rule2 := [q^2 = qq, k^2 = kk, k*q = kq]:
+rule3 := [kk = Q]:
+
+propset := {B1, B2}:
+
+gen_int := integrand(nu1, nu2):
+
+substitutions := eliminate(applyrule(rule1, props), applyrule(rule1, products))[1]:
+
+factor1 := map(simplify, expand(diff(q*gen_int, q)/gen_int)):
+ibp1 := expand(collect(subs(substitutions, applyrule(rule2, factor1)), propset, distributed, factor)):
+ibp1 := applyrule(rule3, ibp1):
+ibp1 := collect(ibp1, propset):
+
+factor2 := map(simplify, expand(k*diff(gen_int, q)/gen_int)):
+ibp2 := expand(collect(subs(substitutions, applyrule(rule2, factor2)), propset, distributed, factor)):
+ibp2 := applyrule(rule3, ibp2):
+ibp2 := collect(ibp2, propset):
+
+
+find_indices := proc(term)
+ local f, fact, expo, ind1, ind2, coeff:
+
+ ind1 := 0:
+ ind2 := 0:
+ coeff := 1:
+
+ for fact in op(2, factors(term)) do
+  f := op(1, fact):
+  expo := op(2, fact):
+  
+   if f = B1^nu1 then
+    ind1 := ind1 + nu1:
+   elif f = B2^nu2 then
+    ind2 := ind2 + nu2:
+   elif f = B1 then
+    ind1 := ind1 + (-1)*expo:
+   elif f = B2 then
+    ind2 := ind2 + (-1)*expo:
+   else 
+    coeff := coeff*f^expo:
+   fi:
+ od:
+ return [ind1, ind2], op(1, factors(term))*coeff:
+
+end proc:
+
+
+create_int_func := proc(n1, n2)
+ option remember:
+ return Bub(n1, n2):
+ end proc: 
+
+
+
+create_ibp := proc(expr)
+ local new, coeff, indices, terms, term:
+
+ terms := if type(expr, `+`) then [op(expr)] else [expr] end if:
+ new := 0:
+
+ for term in terms do
+  indices, coeff := find_indices(term):
+  new := new + coeff*create_int_func(op(indices)):
+ od:
+  
+ new := collect(new, indets(new, specfunc(anything, Bub))):
+ return new:
+
+end proc: 
+
+
+prop_int := prop_integrand(nu1, nu2):
+
+ibp_list := [expand(ibp1*prop_int), expand(ibp2*prop_int)]:
+
+new_ibps := []:
+
+
+for ibp in ibp_list do
+ new_ibps := [op(new_ibps), create_ibp(ibp)]:
+od: 
+
+print("The Bubble IBPs for D = 1 are:"):
+print(new_ibps):
+
+
+
+

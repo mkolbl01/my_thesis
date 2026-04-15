@@ -1,0 +1,399 @@
+
+# This is the code that expresses the integrals as bubble integrals so that they can be reduced 
+
+#kernelopts(numcpus=8):
+
+forget(all):
+
+Digits := 20:
+
+
+
+read "data/Mass_subs.txt":
+
+read "codes/ibp_reduction_bubble.map":
+
+
+
+replace_and_find := proc(expr)
+option remember:
+ local plus_terms, t, m1, m2, newexpr, found1, found2:
+
+    plus_terms := indets(expr, `+`):
+     
+    found1 := false:
+    found2 := false:
+
+    for t in plus_terms do
+        
+
+        if has(t,q^2) then
+         t := t/coeff(t,q^2):
+        elif has(t,(k-q)^2) then
+          t := t/coeff(t,(k-q)^2):
+        elif has(t,(k+q)^2) then
+          t := t/coeff(t,(k+q)^2):
+        fi:
+
+        if has(t, (k-q)^2) and nops(t) = 2 then
+            m1 := op(select(u -> not u=(k-q)^2, [op(t)])[1]):
+            found1 := true:
+        elif has(t, (k+q)^2) and nops(t) = 2 then
+            m1 := op(select(u -> not u=(k+q)^2, [op(t)])[1]):
+            found1 := true:
+        elif has(t, q^2) and nops(t)=2 then
+            m2 := op(select(u -> not u=q^2, [op(t)])[1]):
+            found2:= true:
+        fi:
+    od:
+
+    if not found2 then
+      m2 := 0:
+    fi:
+
+    if not found1 then
+      m1 := 0:
+    fi: 
+
+
+    newexpr := expr:
+    
+    newexpr := subsindets(newexpr, `+`,
+        u -> 
+             if has(u,(k-q)^2) and nops(u)=2 then
+                 (A1 + m1)*op(1,factors(u))
+             elif has(u,(k+q)^2) and nops(u)=2 then
+                 (A1 + m1)*op(1,factors(u))
+             elif has(u,q^2) and nops(u)=2 then
+                 (A2 + m2)*op(1,factors(u))
+             else
+                 u
+             fi):
+
+ local f, fact, expo, B, new, n1, n2, d1, d2, power:
+ new := 1:
+
+ d1 := 0:
+ d2 := 0:
+ n1 := 0:
+ n2 := 0:
+
+ for f in op(2,factors(newexpr)) do
+  fact := op(1,f):
+  expo := op(2,f):
+  B := 'B':
+
+  if fact = A1 + m1 then
+   d1 := -expo:
+   
+  elif fact = A2 + m2 then
+   d2 := -expo:
+
+  elif patmatch(fact, q^(P::integer), B) then
+   power := rhs(op(B)):
+   fact := subs(q^power = (A2)^(power/2), fact):
+   n2 := expo/2:
+   fact := A2^(power/2):
+
+  elif patmatch(fact, (k-q)^(P::integer), B) then
+   power := rhs(op(B)):
+   fact := subs((k-q) = (A1)^(1/2), fact):
+   n1 := expo/2:
+   fact := A1^(power/2):
+
+  elif patmatch(fact, (k+q)^(P::integer), B) then
+   power := rhs(op(B)):
+   fact := subs((k+q)^(power) = (A1)^(power/2), fact):
+   n1 := expo/2:
+   fact := A1^(power/2):
+  fi:
+  
+  new := new*(fact^expo):
+ od:
+
+ new := new*op(1, factors(newexpr)):
+
+ new := new*(A1 + m1)^d1*(A2 + m2)^d2:
+
+ if n1 > 0 then
+  new := new/A1^n1:
+ elif n1 < 0 then
+  new := new*A1^(-n1):
+ fi:
+
+ if n2 > 0 then
+  new := new/A2^n2:
+ elif n2 < 0 then
+  new := new*A2^(-n2):
+ fi:
+ 
+ return numerical_evaluation(new), [n1, n2, d1, d2], [m1, m2]:
+
+end proc:
+
+
+
+build_integral := proc(n1, n2, d1, d2, M1, M2)
+  return A1^n1*A2^n2/((A1 + M1)^d1*(A2 + M2)^d2):
+end proc: 
+
+
+
+reduce_numerators := proc(coef, ind, masses)
+ local n1, n2, d1, d2, c, reduced1, reduced2, new, terms, t, second_new, term, terms2, M1, M2, mass1, mass2:
+ 
+ n1, n2, d1, d2 := op(ind):
+
+ M1 := masses[1]:
+ M2 := masses[2]:
+
+ new := 0:
+
+ if n1 > 0 and d1 > 0 then
+  reduced1 := reduce_numerator1(n1, n2, d1, d2, M1, M2):
+  reduced1 := collect(expand(reduced1), indets(reduced1, specfunc(anything, NoDouble1))):
+  new := reduced1:
+ else
+  new := NoDouble1(op(ind), op(masses)):
+ fi:
+
+ terms := if type(new, `+`) then [op(new)] else [new] end if:
+ second_new := 0:
+ 
+ for term in terms do
+  n1, n2, d1, d2, mass1, mass2 := op(op(indets(term, specfunc(anything, NoDouble1)))):
+  c := term/NoDouble1(n1, n2, d1, d2, mass1, mass2):
+
+ if n2 > 0 and d2 > 0 then
+  reduced2 := reduce_numerator2(n1, n2, d1, d2, mass1, mass2):
+  reduced2 := expand(reduced2):
+  reduced2 := collect(expand(reduced2), indets(reduced2, specfunc(anything, NoDouble2))):
+
+
+  terms2 := if type(reduced2, `+`) then [op(reduced2)] else [reduced2] end if:
+  for t in terms2 do:
+   second_new := second_new + eval(t, NoDouble2 = build_integral)*numerical_evaluation(c)*coef:  #numerical_evaluation(c)
+  od:
+ else 
+   second_new := second_new + eval(term, NoDouble1 = build_integral)*coef:
+ fi:
+ od:
+ 
+ return second_new:
+end proc:
+
+
+
+reduce_numerator1 := proc(n1, n2, d1, d2, M1, M2)
+ option remember:
+
+ if n1 = 0 or d1 = 0 then
+  return NoDouble1(n1, n2, d1, d2, M1, M2):
+ fi:
+
+ return procname(n1-1, n2, d1-1, d2, M1, M2) - M1*procname(n1-1, n2, d1, d2, M1, M2):
+end proc:
+
+
+reduce_numerator2 := proc(n1, n2, d1, d2, M1, M2)
+ option remember:
+
+ if n2 = 0 or d2 = 0 then
+  return NoDouble2(n1, n2, d1, d2, M1, M2):
+ fi:
+
+ return procname(n1, n2-1, d1, d2-1, M1, M2) - M2*procname(n1, n2-1, d1, d2, M1, M2):
+end proc:
+
+
+
+partial_fractioning := proc(expr)
+ local pf, term, terms, new, frac_terms, t:
+
+ new := 0:
+
+ terms := if type(expr, `+`) then [op(expr)] else [expr] end if:
+
+ for term in terms do
+ 
+ local n:
+
+ n := numer(term):
+ term := term/n:
+
+ pf := convert(term, parfrac, A1):
+ 
+ if pf = term then
+   pf := convert(term, parfrac, A2):
+ else
+   pf := map(t -> convert(t, parfrac, A2), pf):
+ fi:
+ 
+ frac_terms := if type(pf, `+`) then [op(pf)] else [pf] end if:
+  
+  for t in frac_terms do
+   new := new + n*t:
+  od:
+ od: 
+
+ return new:
+
+end proc:
+
+
+
+
+extract_indices_masses := proc(expr, masses)
+ local nu1, nu2, mass1, mass2, expo, fact, f:
+
+ nu1 := 0:
+ nu2 := 0:
+ mass1 := 0:
+ mass2 := 0:
+
+ for f in op(2,factors(expr)) do
+  fact := op(1, f):
+  expo := op(2, f):
+
+  if fact = A1 + masses[1] then
+   nu1 := -expo:
+   mass1 := masses[1]:
+  elif fact = A1 then
+   nu1 := -expo:
+   mass1 := 0:
+  elif fact = A2 + masses[2] then
+   nu2 := -expo:
+   mass2 := masses[2]:
+  elif fact = A2 then
+   nu2 := -expo:
+   mass2:= 0:
+  fi:
+ od:
+
+ return [nu1, nu2, mass1, mass2]:
+end proc:
+
+
+
+numerical_evaluation := proc(expr)
+ local j, r, expr1, submom, submass, indetermined, i:
+
+  expr1 := expr:
+  submass := [op(mass_subs)]:
+  submom := [op(mom_subs)]:
+ 
+ if not verify(indets(expr1), {k, Q}, `subset`) then
+  indetermined := [op(indets(expr1))]:
+
+  for i from 1 to nops(indetermined) do
+    for r from 1 to nops(submom) do
+     if indetermined[i] = lhs(submom[r]) then
+      expr1 := eval(expr1, indetermined[i] = rhs(submom[r])):
+     fi:
+    od:
+    for j from 1 to nops(submass) do
+     if indetermined[i] = lhs(submass[j]) then
+      expr1 := eval(expr1, indetermined[i] = rhs(submass[j])):
+     fi:
+    od:
+  od:
+ fi:
+
+
+ return simplify(expr1):
+end proc: 
+
+
+
+
+term_reduction := proc(expr)
+
+ local coef, nus, masses, true_dens, terms, term, new_sum, nu1, nu2, pM1, pM2, new_coef, reduced, new_term:
+
+ coef, nus, masses := replace_and_find(expr):
+ true_dens := partial_fractioning(reduce_numerators(coef, nus, masses)):
+ terms := if type(true_dens, `+`) then [op(true_dens)] else [true_dens] end if:
+ new_sum := 0:
+ 
+ for term in terms do
+  nu1, nu2, pM1, pM2 := op(extract_indices_masses(term, masses)):
+  new_coef := term*(A1+pM1)^nu1*(A2+ pM2)^nu2:
+  
+  if pM1 <> 0 then 
+   pM1 := numerical_evaluation(pM1):
+  fi:
+
+  if pM2 <> 0 then
+   pM2 := numerical_evaluation(pM2):
+  fi:
+
+
+  reduced := reduce_int(nu1, nu2, pM1, pM2, Q):  
+
+  new_coef := numerical_evaluation(new_coef):
+
+  new_term := evalf(expand(new_coef*reduced)):
+
+  new_sum := simplify(new_sum + new_term):
+ od:
+
+ new_sum := collect(new_sum, indets(new_sum, specfunc(anything, master))):
+ return evalf(new_sum):
+end proc:
+
+
+
+
+full_entry_reduction := proc(expr)
+ option remember:
+ local terms, term, new_sum:
+
+ new_sum := 0:
+ terms := if type(expr, `+`) then [op(expr)] else [expr] end if:
+ 
+ for term in terms do
+   new_sum := simplify(new_sum + term_reduction(term)):
+   new_sum := collect(new_sum, indets(new_sum, specfunc(anything, master))):
+ od:
+
+ return new_sum:
+end proc:
+
+
+
+reduce_diagram := proc(mat)
+ local diag, res, i, j, entry, tmp:
+
+ if type(mat, list) and nops(mat) = 16 then
+    if andmap(x -> type(x, list) and nops(x) = 16, mat) then
+     diag := "P22":
+    elif not type(mat[1], list) then
+     diag := "P13":
+    fi:
+ fi:
+ 
+ if diag = "P22" then
+ res := []:
+   for i from 1 to nops(mat[1]) do
+     tmp := []:
+     for j from 1 to nops(mat[1]) do 
+      entry := full_entry_reduction(mat[i,j]):
+      tmp := [op(tmp), entry]:
+     od:
+     res := [op(res), tmp]:
+   od: 
+
+ elif diag = "P13" then
+ res := []:
+   for i from 1 to nops(mat) do
+     entry := full_entry_reduction(mat[i]):
+     res := [op(res), entry]:
+   od:
+ fi:
+
+ return res:
+end proc:
+
+
+
+

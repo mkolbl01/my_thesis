@@ -1,0 +1,98 @@
+
+# Trivial diagonalization for the top sector of the bubble topology
+
+
+#kernelopts(numcpus=8):
+
+Digits := 20:
+
+IBPS := proc(nu1, nu2, M1, M2, Q, D)
+
+ return [(-nu1-2*nu2+D)*Bub(nu1,nu2)+2*nu2*M2*Bub(nu1,nu2+1)-nu1*Bub(
+ nu1+1,nu2-1)+nu1*(Q+M2+M1)*Bub(nu1+1,nu2), nu2*Bub(nu1-1,nu2+1)+(nu1-nu2)*Bub(
+ nu1,nu2)-(Q-M2+M1)*nu2*Bub(nu1,nu2+1)-nu1*Bub(nu1+1,nu2-1)-nu1*(-Q-M2+M1)*Bub(
+ nu1+1,nu2)]:
+
+end proc:
+ 
+
+vars := proc(nu1, nu2)
+return [
+    Bub(nu1+1,nu2),
+    Bub(nu1,nu2+1),
+    NULL
+]:
+end proc:
+
+
+diagonalizeIBP := proc(ibp_eqs::procedure, vars::procedure, nu1, nu2, M1, M2, Q, D) 
+    local eqs, rules, var, i, sol, k, reduced_last, v_last, sol_last, rules_old;
+
+    eqs   := ibp_eqs(nu1, nu2, M1, M2, Q, D):   
+    rules := []:
+
+    for var in vars(nu1, nu2) do
+        i := 1:
+
+        while i <= nops(eqs) and not has(eqs[i], var) do
+            i := i+1:
+        od:
+
+        if i > nops(eqs) then
+            error "No IBP contains %1", var:
+        fi:
+
+        sol := solve(eqs[i], var):
+
+        if sol = NULL then
+            error "Cannot solve equation %1 for variable %2", i, var:
+        fi:
+
+        rules := [op(rules), var = sol]:
+        eqs := subs(var = sol, [op(1..i-1, eqs), op(i+1..nops(eqs), eqs)]):
+        eqs := subs(var = sol, eqs):
+    od:
+
+    for k from nops(rules) by -1 to 1 do
+        rules[k] := eval(rules[k], rules[k+1 .. nops(rules)]):
+    od:
+
+    return simplify(rules):
+end proc:
+
+
+
+make_reducer := proc(rules_list)
+    local r:
+    return proc(idx::posint, a1::anything, a2::anything, m1::anything, m2::anything,
+                Qv::anything, Dv::anything)
+       
+        local exprs, rr, subsmap:
+        exprs := []:
+        
+        if idx > nops(rules_list) then
+            error "Rule index %1 out of range", idx:
+        fi:
+
+        r := rules_list[idx]:
+        rr := rhs(r):
+
+        subsmap := {
+                nu1 = a1, nu2 = a2, M1 = m1, M2 = m2,
+                Q = Qv, D = Dv
+            }:
+       
+        rr := simplify(eval(rr, subsmap)):
+    
+        exprs := [op(exprs), rr]:
+
+        return op(exprs):   
+    end proc:
+end proc:
+
+
+
+
+ 
+
+

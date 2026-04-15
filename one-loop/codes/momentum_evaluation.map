@@ -1,0 +1,204 @@
+
+# This is the main file that evaluates the reduced diagrams P13 and P22 for different momentum values
+
+#kernelopts(numcpus=8):
+
+forget(all):
+
+with(plots):
+
+Digits := 20:
+
+
+read "data/Cosmo_coeffs.txt":
+
+read "data/pk_fid_maple_input.txt":
+
+read "codes/convert_to_bubble_integrals.map":
+
+
+# For UV correction of P13
+
+read "data/P13_UV.txt":
+
+read "codes/evaluate_UV.map":
+
+
+
+getP22 := proc()
+    if not assigned(P22) then
+        read "data/P22_matrix.txt":
+    fi:
+    return P22_mat:
+end proc:
+
+
+getP13 := proc()
+    if not assigned(P13) then
+        read "data/P13_matrix.txt":
+    fi:
+    return P13_mat:
+end proc:
+
+
+
+
+
+evaluate_for_momentum := proc(mat, external_mom_list)
+ 
+ local diag, K, i , j, res, tmp, entry, final:
+
+ final := []:
+
+ if type(mat, list) and nops(mat) = 16 then
+    if andmap(x -> type(x, list) and nops(x) = 16, mat) then
+     diag := "P22":
+    elif not type(mat[1], list) then
+     diag := "P13":
+    fi:
+ fi:
+
+
+ for K in external_mom_list do 
+
+  if diag = "P22" then 
+  res := []:
+
+   for i from 1 to nops(mat[1]) do
+     tmp := []:
+     for j from 1 to nops(mat[1]) do 
+      entry := subs(k = K, mat[i,j]):
+      entry := subs(Q = K^2, entry):
+      entry := eval(entry, master = evaluate_masters):
+      tmp := [op(tmp), evalf(entry)]:
+     od:
+     res := [op(res), tmp]:
+   od: 
+
+  elif diag = "P13" then
+  res := []:
+
+   for i from 1 to nops(mat) do 
+      entry := eval(mat[i], k = K):
+      entry := eval(entry, Q = K^2):
+      entry := eval(entry, master = evaluate_masters):
+      res := [op(res), evalf(entry)]:
+   od: 
+  fi:
+
+ final := [op(final), res]:
+ od:
+ 
+ return final:
+end proc:
+
+
+
+get_points_for_plotP22 := proc(list)
+
+ local c, i, res, entry:
+ 
+ print(nops(list), nops(list[1]), nops(list[1][1])):
+ c := Vector(cosmo_coef):  
+ res := []:
+
+ for i from 1 to nops(list) do
+  entry := LinearAlgebra:-MatrixVectorMultiply(Matrix(list[i]), c):
+  entry := LinearAlgebra:-MatrixVectorMultiply(MTM:-transpose(c), entry):
+  res := [op(res), evalf(Re(entry))]:
+ od:
+ 
+ return res:
+end proc:
+
+
+get_points_for_plotP13 := proc(list)
+
+ local c, i, res, entry:
+
+ c := Vector[row](cosmo_coef): 
+ res := []:
+
+ for i from 1 to nops(list) do
+  entry := c.Vector(list[i]):
+  res := [op(res), evalf(Re(entry))]:
+ od:
+ 
+ return res:
+end proc:
+
+
+
+# ---------------------------------------- INITIATIONS and CALCULATIONS -----------------------------------------------
+
+
+External_mom := momentum:
+Plinear := Plin:
+
+
+
+#_______ UV part of P13 that needs to be subtracted from the analytic P13 __________
+
+expr := P13_UV:
+
+expr := evaluate_UV(expr):
+
+P13wcc := evaluate_for_momentum(expr, External_mom):
+
+P13uv := get_points_for_plotP13(P13wcc):
+
+P13uvfull := [seq(Re(P13uv[i]*Plinear[i]), i=1..nops(Plinear))]:
+points := [seq([External_mom[i], -P13uvfull[i]], i=1..nops(External_mom))]:
+
+
+# writedata("data/resP13_UVpart.txt", points);
+
+pointplot(points, axis[1,2]=[mode=log]); 
+
+
+
+# __________ Analytic P13 _______________
+
+expr := getP13():
+
+expr := reduce_diagram(expr):
+
+P13wcc := evaluate_for_momentum(expr, External_mom):
+
+P13 := get_points_for_plotP13(P13wcc):
+
+P13full := [seq(Re(P13[i]*Plinear[i]), i=1..nops(Plinear))]:
+points := [seq([External_mom[i], -P13full[i]], i=1..nops(External_mom))]:
+
+# writedata("data/resP13_analytic.txt", points);
+
+pointplot(points, axis[1,2]=[mode=log]);
+
+
+
+
+# Has to be un-commented to use
+
+(*
+
+# ___________ Analytic P22 _______________
+
+
+expr := getP22():
+
+expr := reduce_diagram(expr):
+
+P22wcc := evaluate_for_momentum(expr, External_mom):
+
+P22full := get_points_for_plotP22(P22wcc):
+
+points := [seq([External_mom[i], P22full[i]], i=1..nops(External_mom))]:
+
+# writedata("data/resP22_analytic.txt", points);
+
+pointplot(points, axis[1,2]=[mode=log]);
+
+
+*)
+
+

@@ -1,0 +1,148 @@
+ 
+
+forget(all):
+
+
+integrand := proc(n1, n2, n3, n4, n5) 
+
+ return 1/((k^2 + M1)^n1*((k + p)^2 + M2)^n2*((l + p)^2 + M3)^n3*(l^2 + M4)^n4*((k - l)^2 + M5)^n5):
+
+end proc:
+
+
+prop_integrand := proc(n1, n2, n3, n4, n5)
+
+ return 1/(B1^n1*B2^n2*B3^n3*B4^n4*B5^n5):
+
+end proc: 
+
+
+props := {B1 = kk + M1, B2 = kk + 2*kp + pp + M2, B3 = ll + 2*lp + pp + M3, B4 = ll + M4, B5 = kk + ll - 2*kl + M5}:
+
+products := {kl, kp, lp, k^2, l^2}:
+
+rule1 := [k^2 = kk, l^2 = ll]:
+rule2 := [p^2 = pp, k^2 = kk, l^2 = ll, k*l = kl, k*p = kp, l*p = lp]:
+rule3 := [pp = Q]:
+
+propset := {B1, B2, B3, B4, B5}:
+
+gen_int := integrand(nu1, nu2, nu3, nu4, nu5):
+
+substitutions := eliminate(applyrule(rule1, props), applyrule(rule1, products))[1]:
+
+factor1 := map(simplify, expand(diff(k*gen_int, k)/gen_int)):
+ibp1 := expand(collect(subs(substitutions, applyrule(rule2, factor1)), propset, distributed, factor)):
+ibp1 := applyrule(rule3, ibp1):
+ibp1 := collect(ibp1, propset):
+
+factor2 := map(simplify, expand(l*diff(gen_int, k)/gen_int)):
+ibp2 := expand(collect(subs(substitutions, applyrule(rule2, factor2)), propset, distributed, factor)):
+ibp2 := applyrule(rule3, ibp2):
+ibp2 := collect(ibp2, propset):
+
+factor3 := map(simplify, expand(p*diff(gen_int, k)/gen_int)):
+ibp3 := expand(collect(subs(substitutions, applyrule(rule2, factor3)), propset, distributed, factor)):
+ibp3 := applyrule(rule3, ibp3):
+ibp3 := collect(ibp3, {B1, B2, B3, B4, B5}):
+
+factor4 := map(simplify, expand(k*diff(gen_int, l)/gen_int)):
+ibp4 := expand(collect(subs(substitutions, applyrule(rule2, factor4)), propset, distributed, factor)):
+ibp4 := applyrule(rule3, ibp4):
+ibp4 := collect(ibp4, propset):
+
+factor5 := map(simplify, expand(diff(l*gen_int, l)/gen_int)):
+ibp5 := expand(collect(subs(substitutions, applyrule(rule2, factor5)), propset, distributed, factor)):
+ibp5 := applyrule(rule3, ibp5):
+ibp5 := collect(ibp5, propset):
+
+factor6 := map(simplify, expand(p*diff(gen_int, l)/gen_int)):
+ibp6 := expand(collect(subs(substitutions, applyrule(rule2, factor6)), propset, distributed, factor)):
+ibp6 := applyrule(rule3, ibp6):
+ibp6 := collect(ibp6, propset):
+
+
+
+find_indices := proc(term)
+ local f, fact, expo, ind1, ind2, ind3, ind4, ind5, coeff:
+
+ ind1 := 0:
+ ind2 := 0:
+ ind3 := 0:
+ ind4 := 0:
+ ind5 := 0:
+ coeff := 1:
+
+ for fact in op(2, factors(term)) do
+  f := op(1, fact):
+  expo := op(2, fact):
+  
+   if f = B1^nu1 then
+    ind1 := ind1 + nu1:
+   elif f = B2^nu2 then
+    ind2 := ind2 + nu2:
+   elif f = B3^nu3 then
+    ind3 := ind3 + nu3: 
+   elif f = B4^nu4 then
+    ind4 := ind4 + nu4:
+   elif f = B5^nu5 then
+    ind5 := ind5 + nu5:
+   elif f = B1 then
+    ind1 := ind1 + (-1)*expo:
+   elif f = B2 then
+    ind2 := ind2 + (-1)*expo:
+   elif f = B3 then
+    ind3 := ind3 + (-1)*expo: 
+   elif f = B4 then
+    ind4 := ind4 + (-1)*expo:
+   elif f = B5 then
+    ind5 := ind5 + (-1)*expo:
+   else 
+    coeff := coeff*f^expo:
+   fi:
+ od:
+ return [ind1, ind2, ind3, ind4, ind5], op(1, factors(term))*coeff:
+
+end proc:
+
+
+create_int_func := proc(n1, n2, n3, n4, n5)
+ option remember:
+ return SC(n1, n2, n3, n4, n5):
+ end proc: 
+
+
+
+create_ibp := proc(expr)
+ local new, coeff, indices, terms, term:
+
+ terms := if type(expr, `+`) then [op(expr)] else [expr] end if:
+ new := 0:
+ 
+ for term in terms do
+  indices, coeff := find_indices(term):
+  new := new + coeff*create_int_func(op(indices)):
+ od:
+  
+ new := collect(new, indets(new, specfunc(anything, SC))):
+ return new:
+
+end proc: 
+
+
+prop_int := prop_integrand(nu1, nu2, nu3, nu4, nu5):
+
+ibp_list := [expand(ibp1*prop_int), expand(ibp2*prop_int), expand(ibp3*prop_int), expand(ibp4*prop_int), expand(ibp5*prop_int), expand(ibp6*prop_int)]:
+
+new_ibps := []:
+
+
+for ibp in ibp_list do
+ new_ibps := [op(new_ibps), create_ibp(ibp)]:
+od: 
+
+print(new_ibps):
+
+
+
+

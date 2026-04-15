@@ -1,0 +1,233 @@
+
+# This code evaluated the UV part of P13 that has to be subtracted from the analytic P13 
+
+#kernelopts(numcpus=8):
+
+forget(all):
+
+Digits := 20:
+
+
+
+read "data/Mass_subs.txt":
+
+read "codes/evaluation_bubble.map":
+
+
+replace_and_find_UV := proc(expr)
+ local plus_terms, t, m1, m2, newexpr, found1, found2:
+
+    plus_terms := indets(expr, `+`):
+     
+    found1 := false:
+    found2 := false:
+
+    for t in plus_terms do
+
+        if has(t,q^2) then
+         t := t/coeff(t,q^2):
+        elif has(t,(k-q)^2) then
+          t := t/coeff(t,(k-q)^2):
+        elif has(t,(k+q)^2) then
+          t := t/coeff(t,(k+q)^2):
+        fi:
+
+        if has(t, (k-q)^2) and nops(t) = 2 then
+            m1 := op(select(u -> not u=(k-q)^2, [op(t)])[1]):
+            found1 := true:
+        elif has(t, (k+q)^2) and nops(t) = 2 then
+            m1 := op(select(u -> not u=(k+q)^2, [op(t)])[1]):
+            found1 := true:
+        elif has(t, q^2) and nops(t)=2 then
+            m2 := op(select(u -> not u=q^2, [op(t)])[1]):
+            found2:= true:
+        fi:
+    od:
+
+    if not found2 then
+      m2 := 0:
+    fi:
+
+    if not found1 then
+      m1 := 0:
+    fi: 
+
+
+    newexpr := expr:
+    
+    newexpr := subsindets(newexpr, `+`,
+        u -> 
+             if has(u,(k-q)^2) and nops(u)=2 then
+                 (A1 + m1)*op(1,factors(u))
+             elif has(u,(k+q)^2) and nops(u)=2 then
+                 (A1 + m1)*op(1,factors(u))
+             elif has(u,q^2) and nops(u)=2 then
+                 (A2 + m2)*op(1,factors(u))
+             else
+                 u
+             fi):
+
+ local f, fact, expo, B, new, n1, n2, d1, d2, power:
+ new := 1:
+
+ d1 := 0:
+ d2 := 0:
+ n1 := 0:
+ n2 := 0:
+
+ for f in op(2,factors(newexpr)) do
+  fact := op(1,f):
+  expo := op(2,f):
+  B := 'B':
+
+  if fact = A1 + m1 then
+   d1 := -expo:
+   
+  elif fact = A2 + m2 then
+   d2 := -expo:
+
+  elif patmatch(fact, q^(P::integer), B) then
+   power := rhs(op(B)):
+   fact := subs(q^power = (A2)^(power/2), fact):
+   n2 := expo/2:
+   fact := A2^(power/2):
+
+  elif patmatch(fact, (k-q)^(P::integer), B) then
+   power := rhs(op(B)):
+   fact := subs((k-q) = (A1)^(1/2), fact):
+   n1 := expo/2:
+   fact := A1^(power/2):
+
+  elif patmatch(fact, (k+q)^(P::integer), B) then
+   power := rhs(op(B)):
+   fact := subs((k+q)^(power) = (A1)^(power/2), fact):
+   n1 := expo/2:
+   fact := A1^(power/2):
+  fi:
+  
+  new := new*(fact^expo):
+ od:
+
+ new := new*op(1, factors(newexpr)):
+
+ new := new*(A1 + m1)^d1*(A2 + m2)^d2:
+
+ if n1 > 0 then
+  new := new/A1^n1:
+ elif n1 < 0 then
+  new := new*A1^(-n1):
+ fi:
+
+ if n2 > 0 then
+  new := new/A2^n2:
+ elif n2 < 0 then
+  new := new*A2^(-n2):
+ fi:
+ 
+ return numerical_evaluation_UV(new), [n1, n2, d1, d2], [m1, m2]:
+
+end proc:
+
+
+
+
+numerical_evaluation_UV := proc(expr)
+ local j, r, expr1, submom, submass, indetermined, i:
+
+  expr1 := expr:
+  submass := [op(mass_subs)]:
+  submom := [op(mom_subs)]:
+ 
+ if not verify(indets(expr1), {k, Q}, `subset`) then
+  indetermined := [op(indets(expr1))]:
+
+  for i from 1 to nops(indetermined) do
+    for r from 1 to nops(submom) do
+     if indetermined[i] = lhs(submom[r]) then
+      expr1 := eval(expr1, indetermined[i] = rhs(submom[r])):
+     fi:
+    od:
+    for j from 1 to nops(submass) do
+     if indetermined[i] = lhs(submass[j]) then
+      expr1 := eval(expr1, indetermined[i] = rhs(submass[j])):
+     fi:
+    od:
+  od:
+ fi:
+
+ return simplify(expr1):
+end proc: 
+
+
+
+
+term_eval := proc(expr)
+
+ local masses, terms, term, new_sum, pM2, new_coef, new_term, n1, n2, d1, d2, UVint, nus:
+ 
+ terms := if type(expr, `+`) then [op(expr)] else [expr] end if:
+
+ new_sum := 0:
+
+ for term in terms do
+  new_coef, nus, masses := replace_and_find_UV(term):
+
+  n1 := nus[1]:
+  n2 := nus[2]:
+  d1 := nus[3]:
+  d2 := nus[4]:
+
+  if n1 <> 0 or n2 <> 0 or d1 <> 0 or masses[1] <> 0 then
+   print("terms is not tadpole:", term):
+  fi:
+
+  if masses[2] <> 0 then
+   pM2 := numerical_evaluation_UV(masses[2]):
+  fi:
+
+  UVint := Num_tadUV(pM2, d2):
+
+  new_term := evalf(expand(new_coef*UVint)):
+
+  new_sum := simplify(new_sum + new_term):
+ od:
+
+ return evalf(new_sum):
+end proc:
+
+
+
+
+full_entry_eval := proc(expr)
+ option remember:
+ local terms, term, new_sum, i:
+ 
+ new_sum := 0:
+ terms := if type(expr, `+`) then [op(expr)] else [expr] end if:
+ 
+ 
+ for term in terms do
+   new_sum := simplify(new_sum + term_eval(term)):
+
+ od:
+
+ return new_sum:
+end proc:
+
+
+
+
+evaluate_UV := proc(mat)
+ local res, i, entry:
+
+ res := []:
+   for i from 1 to nops(mat) do
+     entry := full_entry_eval(mat[i]):
+     res := [op(res), entry]:
+   od:
+
+ return res:
+end proc:
+
+
+

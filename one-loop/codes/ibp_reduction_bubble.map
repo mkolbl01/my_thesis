@@ -1,0 +1,163 @@
+
+# This is the IBP reduction code
+
+#kernelopts(numcpus=8):
+
+forget(all):
+
+Digits := 20:
+
+
+
+read "codes/top_sector_diagonalization_bubble.map":
+
+read "codes/combine_ibps_bubble.map":
+
+read "codes/master_values_bubble.map":
+
+
+
+
+ibp_equations := proc(nu1, nu2, M1, M2, Q, D)
+
+ return [(-nu1-2*nu2+D)*Bub(nu1,nu2)+2*nu2*M2*Bub(nu1,nu2+1)-nu1*Bub(
+ nu1+1,nu2-1)+nu1*(Q+M2+M1)*Bub(nu1+1,nu2), nu2*Bub(nu1-1,nu2+1)+(nu1-nu2)*Bub(
+ nu1,nu2)-(Q-M2+M1)*nu2*Bub(nu1,nu2+1)-nu1*Bub(nu1+1,nu2-1)-nu1*(-Q-M2+M1)*Bub(
+ nu1+1,nu2)]:
+
+end proc:
+
+
+vars := proc(nu1, nu2)
+return [
+    Bub(nu1+1, nu2),
+    Bub(nu1, nu2+1),
+    NULL
+]:
+end proc:
+
+
+reduce_bubble := proc(nu1, nu2, M1, M2, Q)
+ option remember;
+
+ local ibp, D, Tadpole:
+
+ D := 3:
+
+ if nu1 < 1 and nu2 < 1 then
+  return 0:
+ fi:
+
+ # SUB TOPOLOGIES: 
+
+ if nu1 < 1 then 
+  return reduce_tadpole(nu1, nu2, M1, M2, Q):
+ elif nu2 < 1 then
+  return reduce_tadpole(nu1, nu2, M1, M2, Q):
+ fi:
+
+
+ if nu1 > 1 and nu2 > 0 then
+  ibp := reducer11(1, nu1-1, nu2, M1, M2, Q, D):
+
+ elif nu2 > 1 and nu1 = 1 then
+  ibp := reducer11(2, nu1, nu2-1, M1, M2, Q, D):
+ 
+ else
+  return master(nu1, nu2, M1, M2, Q):
+ fi:
+
+
+ local Bubble:
+ 
+
+ ibp:= eval(ibp, Bub= (proc(nu1, nu2)
+                     RETURN(Bubble(nu1, nu2, M1, M2, Q))
+                     end)
+                     ):
+ return(eval(ibp, Bubble=procname));
+
+end proc:
+
+
+
+
+reduce_tadpole := proc(nu1, nu2, M1, M2, Q)
+ option remember;
+
+ local ibp, D, b:
+
+ D := 3: 
+
+
+ if not (nu1 < 1 or nu2 < 1) then
+  error "not a subtopology":
+ fi:
+
+ if nu1 < 1 and nu2 < 1 then
+  return 0:
+ fi:
+
+ if nu1 < 1 and M2 = 0 then
+  return 0:
+ fi:
+
+ if nu2 < 1 and M1 = 0 then
+  return 0:
+ fi:
+
+
+ if nu1 > 1 and nu2 < 1 then
+  ibp := reducer10(1, nu1-1, nu2, M1, M2, Q, D):   
+
+ elif nu1 = 1 and nu2 <> 0 then
+  ibp := reducer10(2, 1, nu2+1, M1, M2, Q, D):  
+ 
+ elif nu1 < 1 and nu2 > 1 then
+   ibp := reducer01(1, nu1, nu2-1, M1, M2, Q, D):
+
+ elif nu2 = 1 and nu1 < 0 then
+   ibp := reducer01(2, nu1+1, 1, M1, M2, Q, D):
+
+ else 
+   return evaluate_masters(nu1, nu2, M1, M2, Q):
+ fi:
+
+
+ local Bubble:
+ 
+
+ ibp:= eval(ibp, Bub= (proc(nu1, nu2)
+                     RETURN(Bubble(nu1, nu2, M1, M2, Q))
+                     end)
+                     ):
+
+ return(eval(ibp, Bubble=procname));
+
+end proc: 
+
+
+
+reduce_int := proc(nu1, nu2, M1, M2, Q)
+ local res:
+
+ res := reduce_bubble(nu1, nu2, M1, M2, Q):
+  
+ return simplify(collect(res, indets(res, specfunc(anything, master))));
+end proc:
+
+
+
+# -------------------------------- INITIATION --------------------------------------------
+
+rules11 := diagonalizeIBP(ibp_equations, vars, nu1, nu2, M1, M2, Q, D):
+rules10 := return_sector_rules([1,0]):
+rules01 := return_sector_rules([0,1]):
+
+
+reducer11 := make_reducer(rules11):
+reducer10 := make_reducer(rules10):
+reducer01 := make_reducer(rules01):
+
+
+

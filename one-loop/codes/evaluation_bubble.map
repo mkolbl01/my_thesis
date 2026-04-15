@@ -1,0 +1,71 @@
+
+# This part does the evaluation of the masters analytically and numerically for the UV corrections of P13
+
+Digits := 20:
+
+#kernelopts(numcpus=8):
+
+NumericEventHandler(invalid_operation=`Heaviside/EventHandler`(value_at_zero=0)):
+
+
+Tad_master := proc(M) 
+ return 2/Pi^(1/2)*M^(3/2-1)*GAMMA(3/2)*GAMMA(1-3/2)/GAMMA(1);
+end proc:
+
+
+
+Bubble_master := proc(M1, M2, Q)
+
+ local res:
+
+ res := (Pi/Q)^(1/2)*I
+ *(log(A_func(1, M1/Q, M2/Q)) - log(A_func(0, M1/Q, M2/Q)) - 2*Pi*I*Heaviside(Im(A_func(1, M1/Q, M2/Q)))*Heaviside(-Im(A_func(0, M1/Q, M2/Q)))):
+ 
+ return res:
+end proc:
+
+
+
+
+A_func := proc(ind, m1, m2)
+ local res:
+
+ if ind = 0 then
+  res := 2*m2^(1/2) + I*(m1 - m2 + 1):
+
+ elif ind = 1 then
+  res := 2*m1^(1/2) + I*(m1 - m2 - 1):
+ fi:
+
+ return res:
+end proc:
+
+
+
+Build_integrand := proc(nu1, nu2, M1, M2)
+ local k:
+
+ return 1/((2*Pi)^3*(k^2 + q^2 - 2*q*k*mu + M1)^nu1*(q^2 + M2)^nu2):
+
+end proc:
+
+
+
+Num_tadUV := proc(M, nu)
+ local expr, res, f, measure, qUV:
+
+ qUV := 1: 
+
+ expr := Build_integrand(0, nu, M, M):
+
+
+ expr := 2*Pi/GAMMA(1)*(10 - 59*mu^2 + 28*mu^4)*expr/21:
+
+ f := unapply(expr, q, mu):
+
+ res := evalf(Int(f(qvar,muvar), qvar=qUV..infinity, muvar=-1..1)):
+ 
+ return res:
+end proc:
+
+

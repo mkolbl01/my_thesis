@@ -1,0 +1,1953 @@
+
+
+# This is the IBP solver for the sun-cut topology
+
+
+#kernelopts(numcpus=8):
+
+
+with(LinearAlgebra):
+with(MTM):
+with(ListTools):
+with(Logic):
+
+
+
+# ----------------------------------------- RAW INPUT IBPS ----------------------------------------------------------
+
+
+IBPS := proc(nu1, nu2, nu3, nu4, nu5, M1, M2, M3, M4, M5, Q, D)
+
+ return [
+-nu2*SC(nu1-1,nu2+1,nu3,nu4,nu5)-nu5*SC(nu1-1,nu2,nu3,nu4,nu5
++1)+nu5*SC(nu1,nu2,nu3,nu4-1,nu5+1)+(-2*nu1-nu2-nu5+D)*SC(nu1,nu2,nu3,nu4,nu5)+
+nu5*(M1-M4+M5)*SC(nu1,nu2,nu3,nu4,nu5+1)+nu2*(M1+Q+M2)*SC(nu1,nu2+1,nu3,nu4,nu5
+)+2*nu1*M1*SC(nu1+1,nu2,nu3,nu4,nu5), 
+
+-nu2*SC(nu1-1,nu2+1,nu3,nu4,nu5)-nu5*SC(nu1-1,
+nu2,nu3,nu4,nu5+1)+nu5*SC(nu1,nu2,nu3,nu4-1,nu5+1)+(-nu1+nu5)*SC(nu1,nu2,nu3,
+nu4,nu5)+nu5*(M1-M4-M5)*SC(nu1,nu2,nu3,nu4,nu5+1)-nu2*SC(nu1,nu2+1,nu3-1,nu4,
+nu5)+nu2*SC(nu1,nu2+1,nu3,nu4,nu5-1)+nu2*(M1-M5+Q+M3)*SC(nu1,nu2+1,nu3,nu4,nu5)
+-nu1*SC(nu1+1,nu2,nu3,nu4-1,nu5)+nu1*SC(nu1+1,nu2,nu3,nu4,nu5-1)+(M1+M4-M5)*nu1
+*SC(nu1+1,nu2,nu3,nu4,nu5),
+
+nu2*SC(nu1-1,nu2+1,nu3,nu4,nu5)
++nu5*SC(nu1-1,nu2,nu3,nu4,nu5+1)-nu5*SC(nu1,nu2-1,nu3,nu4,nu5+1)+nu5*SC(nu1,nu2
+,nu3-1,nu4,nu5+1)-nu5*SC(nu1,nu2,nu3,nu4-1,nu5+1)+(nu1-nu2)*SC(nu1,nu2,nu3,nu4,
+nu5)-nu5*(M1-M2-M4+M3)*SC(nu1,nu2,nu3,nu4,nu5+1)-nu2*(M1+Q-M2)*SC(nu1,nu2+1,nu3
+,nu4,nu5)-nu1*SC(nu1+1,nu2-1,nu3,nu4,nu5)-(M1-Q-M2)*nu1*SC(nu1+1,nu2,nu3,nu4,
+nu5),
+
+nu5*SC(nu1-1,nu2,nu3,nu4,nu5+1)-nu5*SC(nu1,nu2,nu3,
+nu4-1,nu5+1)+(-nu3-2*nu4-nu5+D)*SC(nu1,nu2,nu3,nu4,nu5)-nu5*(M1-M4-M5)*SC(nu1,
+nu2,nu3,nu4,nu5+1)+2*nu4*M4*SC(nu1,nu2,nu3,nu4+1,nu5)-nu3*SC(nu1,nu2,nu3+1,nu4-\
+1,nu5)+nu3*(M4+Q+M3)*SC(nu1,nu2,nu3+1,nu4,nu5),
+
+nu5*SC(nu1-1,nu2,nu3,nu4,nu5+1)-nu4*SC(
+nu1-1,nu2,nu3,nu4+1,nu5)-nu3*SC(nu1,nu2-1,nu3+1,nu4,nu5)-nu5*SC(nu1,nu2,nu3,nu4
+-1,nu5+1)+(-nu4+nu5)*SC(nu1,nu2,nu3,nu4,nu5)-nu5*(M1-M4+M5)*SC(nu1,nu2,nu3,nu4,
+nu5+1)+nu4*SC(nu1,nu2,nu3,nu4+1,nu5-1)+(M1+M4-M5)*nu4*SC(nu1,nu2,nu3,nu4+1,nu5)
+-nu3*SC(nu1,nu2,nu3+1,nu4-1,nu5)+nu3*SC(nu1,nu2,nu3+1,nu4,nu5-1)+nu3*(M4-M5+Q+
+M2)*SC(nu1,nu2,nu3+1,nu4,nu5),
+
+-nu5*SC(nu1-1,nu2,nu3,nu4,nu5+1)+nu5*SC(nu1,nu2-1,nu3,nu4,nu5+1)-nu5*SC(
+nu1,nu2,nu3-1,nu4,nu5+1)-nu4*SC(nu1,nu2,nu3-1,nu4+1,nu5)+nu5*SC(nu1,nu2,nu3,nu4
+-1,nu5+1)+(-nu3+nu4)*SC(nu1,nu2,nu3,nu4,nu5)+nu5*(M1-M2-M4+M3)*SC(nu1,nu2,nu3,
+nu4,nu5+1)+(-M4+Q+M3)*nu4*SC(nu1,nu2,nu3,nu4+1,nu5)+nu3*SC(nu1,nu2,nu3+1,nu4-1,
+nu5)+nu3*(-M4-Q+M3)*SC(nu1,nu2,nu3+1,nu4,nu5)]:
+
+end proc:
+
+
+# ----------------------------------- PRIORITY SORTING FUNCTIONS --------------------------------------------------
+
+
+# Tries to figure out if a passed index list has only symbolic or also numeric indices
+# Returns the shifts (the only numeric index list) that gets sorted, and maybe any other value the integral might need
+# in the sorting, if the numeric indices get special treatment in sorting. 
+
+index_signature := proc(sector, nu)
+ local num_sig, i, nus, sym_inds:
+
+ nus := {nu1, nu2, nu3, nu4, nu5}:
+
+ num_sig := []:
+ sym_inds := select(x -> if indets(x, name) = {} then false else indets(x, name) subset nus fi, nu):
+
+ 
+ for i from 1 to nops(nu) do
+  if not member(nu[i], sym_inds) then 
+   num_sig := [op(num_sig), 1]:
+  else 
+   num_sig := [op(num_sig), 0]:
+  fi:
+ od:
+
+ return num_sig:
+end proc:
+
+
+# This function should evaluate if the half symbolic and half numeric nu indices belong strictly to
+# the sector in which we evaluate them, or if they're in a subsector.
+# nus should be of form [nu1 +1, 2, nu3 -1, 0, 1] so the actual integral indices
+
+determine_numeric_sector := proc(supersector, nus)
+ local sig, new_sector, i: 
+
+ new_sector := supersector:
+ sig := index_signature(sector, nus):
+
+ for i from 1 to nops(nus) do
+  if (sig[i] = 1 and supersector[i] = 1 and nus[i] < 1) then 
+  new_sector[i] := 0:
+  elif (sig[i] = 1 and supersector[i] = 0 and nus[i] > 0) then 
+  new_sector[i] := 1:
+  fi:
+ od:
+
+ if (supersector = new_sector) then 
+  return supersector:
+ else 
+  return new_sector:
+ fi:
+
+end proc: 
+
+
+
+# this one will give me the actual shift that that combo of indices will be evaluated on with sort_integrals 
+
+
+index_shift := proc(sector, nus, signature)
+ local i, shift, nu:
+
+ shift := []:
+ nu:= [nu1, nu2, nu3, nu4, nu5]:
+
+ for i from 1 to nops(nus) do
+ (*
+  if (sector[i] = 0 and signature[i] = 1 and nus[i] > 0) or (sector[i] = 1 and signature[i] = 1 and nus[i] < 0) then
+   error "Positive numeric index with negative sector index":
+  fi: *)
+
+  if (signature[i] = 1 and sector[i] = 0) then
+   shift := [op(shift), nus[i]]:
+  elif (signature[i] = 1 and sector[i] = 1) then 
+   shift := [op(shift), nus[i] - 1]:
+  elif signature[i] = 0 then
+   shift := [op(shift), nus[i] - nu[i]]:
+  fi:
+ od:
+
+ return shift:
+
+end proc:
+
+# This function counts the number of propagators in the integral
+
+propagator_numbers := proc(sector, nus)
+ local nprops, i:
+ nprops := 0:
+
+ for i from 1 to nops(sector) do
+   nprops := nprops + sector[i]:
+ od:
+
+ return nprops:
+end proc:
+
+
+# The shift relative to the sector you are in.
+
+relative_shift := proc(sector, nus)
+ local i, rel_shift:
+
+ rel_shift:= []:
+
+ for i from 1 to nops(nus) do
+  if (sector[i] = 0) then 
+   if (nus[i] < 0) then 
+    rel_shift := [op(rel_shift), -nus[i]]:
+   elif (nus[i] > 0) then 
+    rel_shift := [op(rel_shift), -nus[i]]:
+   else 
+    rel_shift := [op(rel_shift), nus[i]]:
+   fi:
+  elif (sector[i] = 1) then
+   if (nus[i] < 0) then 
+    rel_shift := [op(rel_shift), nus[i]]:
+   elif (nus[i] > 0) then 
+    rel_shift := [op(rel_shift), nus[i]]:
+   else 
+    rel_shift := [op(rel_shift), nus[i]]:
+   fi:
+  fi:
+ od:
+
+ return rel_shift:
+end proc:
+
+
+
+absolute_indices := proc(sector, nus)
+ local abs_sum, i, rel_shifts:
+
+ rel_shifts:= relative_shift(sector, nus):
+ abs_sum := 0:
+
+ for i from 1 to nops(nus) do
+   abs_sum := abs_sum + rel_shifts[i]:
+ od:
+
+ return abs_sum:
+end proc:
+
+
+# Tells you how many negative indices get decreased (if more, the integral is higher in ordering = more complicated)
+
+negative_decrease := proc(sector, nus)
+ local i, neg_dec:
+ neg_dec := 0:
+
+ for i from 1 to nops(nus) do
+  if (sector[i] = 0 and nus[i] < 0) then
+   neg_dec := neg_dec + abs(nus[i]):
+  fi:
+ od:
+ return neg_dec;
+end proc:
+
+
+# Tells you how many numerators there are (if there are more, the intgral is higher in the ordering)
+
+numerator_number := proc(sector, nus)
+ local num_count, i:
+ num_count := 0:
+ for i from 1 to nops(nus) do
+  num_count := num_count + (1 - sector[i])*nus[i]:
+ od:
+ return num_count;
+end proc:
+
+
+
+# This will be the ordering function
+
+integral_ordering := proc(sector, nus)
+ local abs_sum, num_count, i, weights,  neg_dec, rel_shifts:
+
+ #print(nus):
+
+ abs_sum := absolute_indices(sector, nus):
+ num_count := numerator_number(sector, nus):
+ neg_dec := negative_decrease(sector, nus):
+
+ rel_shifts:= relative_shift(sector, nus):
+ #print(rel_shifts):
+
+ weights := []:
+
+ for i from 1 to nops(nus) do
+  if sector[i] = 1 then
+   weights := [op(weights), rel_shifts[i]]: 
+  fi:
+ od:
+
+ for i from 1 to nops(nus) do
+  if sector[i] = 0 then
+   weights := [op(weights), rel_shifts[i]]:
+  fi:
+ od:
+
+ return [abs_sum, neg_dec, num_count, op(weights)]: 
+end proc:
+
+
+
+
+# Returns the higher integral in the ordering in that sector out of the two supplied
+
+sort_integrals:= proc(sector, nus1, nus2)
+ local index, i, n1, n2, prio1, prio2, sig1, sig2, num_sec1, num_sec2, prop_number1, prop_number2:
+
+ sig1 := index_signature(sector, nus1):
+ sig2 := index_signature(sector, nus2):
+ #print(sig1, sig2):
+
+ if sig1 <> sig2 then
+  error "the compared integrals don't have the same numeric signature":
+ fi:
+
+ num_sec1 := determine_numeric_sector(sector, nus1):
+ num_sec2 := determine_numeric_sector(sector, nus2):
+
+
+ if (num_sec1 <> sector or num_sec2 <> sector) then
+  #print("numeric subsector missmatch"):
+  prop_number1 := propagator_numbers(num_sec1, nus1):
+  prop_number2 := propagator_numbers(num_sec2, nus2):
+  
+  if prop_number1 > prop_number2 then
+   return nus1:
+  elif prop_number1 < prop_number2 then
+   return nus2:
+  else 
+   # lexiographic ordering
+   for index from 1 to nops(num_sec1) do
+    if (num_sec1[index] > num_sec2[index]) then
+     return nus1:
+    elif (num_sec1[index] < num_sec2[index]) then
+     return nus2:
+    fi:
+   od:
+  fi:
+ fi:
+
+ # At this point numeric sectors have to be the same
+ local sector_new:
+ sector_new := num_sec1:
+
+ n1 := index_shift(sector_new, nus1, sig1):
+ n2 := index_shift(sector_new, nus2, sig2):
+ #print(n1, n2):
+ 
+ prio1 := integral_ordering(sector_new, n1):
+ prio2 := integral_ordering(sector_new, n2):
+ #print(prio1, prio2):
+
+
+ for index from 1 to nops(prio1) do
+  if (prio1[index] > prio2[index]) then
+   return nus1:
+  elif (prio1[index] < prio2[index]) then
+   return nus2:
+  fi:
+ od:
+ 
+ if (prio1 = prio2) then
+  #print("case of equal priority"):
+  #print(nus1, nus2):
+  for i from 1 to nops(nus1) do
+   if (n1[i] > n2[i] and sector[i]=1) then 
+    return nus1:
+   elif (n1[i] < n2[i] and sector[i]=1) then 
+    return nus2:
+   elif (n1[i] > n2[i] and sector[i]= 0) then
+    return nus2:
+   elif (n1[i] < n2[i] and sector[i]= 0) then
+    return nus1:
+   fi:
+  od:
+ fi:
+ # the only possibility to get here, is if nus1 = nus2
+ return nus1:
+end proc: 
+
+
+
+# ---------------------------------- SORT INTEGRALS IN EQUATIONS ACCORDING TO PRIORITY -------------------------------
+
+
+forced_sort := proc(L, cmp)
+    local wrapped, sorted:
+
+    wrapped := map(x -> [x], L):
+
+    sorted := :-sort(
+        wrapped,
+        proc(u, v)
+            cmp(op(u), op(v));
+        end proc
+    ):
+    return map(u -> u[1], sorted):
+end proc:
+
+
+
+# Comparisson function (boolean return) with sort_integrals so that maple can sort integrals (according to priority!)
+
+myCompare := proc(sector)
+
+    return proc(int1, int2)
+      
+       local nu1, nu2:
+       nu1 := [op(int1)]:
+       nu2 := [op(int2)]:
+       
+
+       return evalb(sort_integrals(sector, nu1, nu2) = nu1):
+    end proc:
+end proc:
+
+
+# same thing as above, but you supply shifts and it sorts them
+
+myCompare_shifts := proc(sector)
+
+    return proc(shift1, shift2)
+      
+       local nu, nus1, nus2:
+       nu := [nu1, nu2, nu3, nu4, nu5]:
+       nus1 := nu + shift1:
+       nus2 := nu + shift2:
+
+       return evalb(sort_integrals(sector, nus1, nus2) = nus1):
+    end proc:
+end proc:
+
+
+# Returns the integral in that equation that is highest in the ordering, so we express that one in terms of all others
+# in form lhs = rhs/lhs_coeff
+# use sort_integrals to sort them 2-by-2, save the ordering, isolate the desired integral.
+# input is expression ibp, not equation form !
+
+
+sort_ints_in_eq := proc(sector, expr)
+local S, t, eq, higher, lower, new_higher, sorted_eq;
+
+  S := {}:  
+  for eq in expr do  
+    for t in indets(eq, specfunc(SC)) do
+        S := S union { [op(t)[1], op(t)[2], op(t)[3], op(t)[4], op(t)[5]]}:
+    od:
+  od:
+
+  # Now sort them pairwise
+
+  higher:= S[1]:
+  S := S minus {higher}:
+
+  while nops(S) > 0 do
+    new_higher := sort_integrals(sector, higher, S[1]):
+    lower := op({higher, S[1]} minus {new_higher}):
+    if new_higher = higher then
+     S := S minus {lower}:
+    else 
+     S := S minus {new_higher}:
+    fi:
+    higher := new_higher:
+  od:
+  #print(higher):
+  sorted_eq:= isolate(expr, SC(op(higher))):
+  return sorted_eq:
+
+end proc:
+
+
+
+# Exactly same thing as above, but does not isolate, instead gives coeff*highest = rhs.
+# input is expression ibp, not equation
+
+sort_ints_in_eq_not_isolate := proc(sector, expr)
+ option remember:
+ local S, t, eq, higher, lower, new_higher, sorted_eq, lhs_int;
+
+ #print("exp in sort not isolate", expr):
+
+  S := {}:  
+  for eq in expr do  
+    for t in indets(eq, specfunc(SC)) do
+        S := S union { [op(t)[1], op(t)[2], op(t)[3], op(t)[4], op(t)[5]]}:
+    od:
+  od:
+
+  #print(S):
+
+  # Now sort them pairwise
+  higher:= S[1]:
+
+  S := S minus {higher}:
+
+  while nops(S) > 0 do
+    new_higher := sort_integrals(sector, higher, S[1]):
+    lower := op({higher, S[1]} minus {new_higher}):
+    if new_higher = higher then
+     S := S minus {lower}:
+    else 
+     S := S minus {new_higher}:
+    fi:
+    higher := new_higher:
+  od:
+
+
+
+  lhs_int := collect(expr, SC(op(higher)), factor):  # This is equation form lhs=rhs
+  lhs_int := simplify(select(has, lhs_int, SC(op(higher)))):
+
+  sorted_eq:= simplify(-lhs_int) = simplify(expr - lhs_int):
+
+  return sorted_eq:
+end proc:
+
+
+
+# Receives the original expression ibps, calls sort_ints_in_eq_not_isolate to get reduction rules
+# output in form coeff*highest = rhs
+
+find_reduction_ibps := proc(sector, ibps)
+ local reduction_rules, expr, sub_rule, sub_rules, lhs_int, lhs_coeff, terms:
+
+ reduction_rules:= []:
+ sub_rules:= {}:
+
+ for expr in ibps do
+  if expr = 0 then
+   next:
+  fi:
+
+  if op(0, expr) = `+` then
+     terms := [op(expr)]:
+  else
+     terms := [expr]:
+  fi:
+
+  if nops(terms) = 1 then
+   next:
+  fi:
+
+  expr:= sort_ints_in_eq_not_isolate(sector, expr):
+  reduction_rules:= [op(reduction_rules), expr]:
+
+ od:
+
+ return reduction_rules:
+
+end proc:
+
+
+
+# This function returns a set of all ints in the system of ibps (not just one equation)
+# ibps are expressions
+
+find_all_ints_in_system:= proc(ibps)
+ local ibp, term, intgrl, S:
+
+  S := {}:  
+  for ibp in ibps do  
+    for term in ibp do
+     for intgrl in indets(term, specfunc(SC)) do
+        S := S union {intgrl}:
+    od:
+   od:
+  od:
+
+  return S:
+end proc:
+
+
+# Receives ibps in expression form, returns sorted list of integrals based on priority ordering
+# from highest to lowest
+
+sort_all_ints_in_system:= proc(sector, ibps)
+ local S, L, compare:
+
+ global compare_global:
+ compare_global := myCompare(sector):
+
+
+ S := find_all_ints_in_system(ibps):
+ L := convert(S, list):
+ compare := myCompare(sector): 
+ 
+
+ return :-sort(L, compare);
+
+end proc:
+
+
+# Receives the rearranged ibps (coeff*highest = rhs) in a random order
+# sorts eqs based on the order of the lhs integrals
+# also works if some lhs_integrals are equal, so you have more than one eq for the same integral
+
+sort_eqs_in_order:= proc(sector, ibps)
+ local lhs_indices, compare, i, lhs_sorted, eqs_sorted, j, eq, eqs_left_over:
+
+
+ lhs_indices:= []:
+ eqs_sorted := []: 
+ eqs_left_over:= convert(ibps, set):
+
+ for eq in ibps do
+ lhs_indices:= [op(lhs_indices), [op(op(indets(lhs(eq), specfunc(SC))))]]:
+ od:
+
+ compare := myCompare(sector):
+ lhs_sorted:= forced_sort(lhs_indices, compare):
+ #print(lhs_sorted):
+
+for i from 1 to nops(lhs_sorted) do
+  for j in eqs_left_over do
+    if ([op(op(indets(lhs(j), specfunc(SC))))] = lhs_sorted[i]) then
+      eqs_sorted := [op(eqs_sorted), j]:
+      eqs_left_over := eqs_left_over minus {j}:
+      break:
+    fi:
+  od:
+od:
+
+return eqs_sorted:
+end proc:
+
+
+
+# ----------------------------------------- SHIFTING FUNCTIONS -----------------------------------------------
+
+# shifts the coeff in front of the integral by shift
+
+shift_coeff:= proc(coeff, shifts)
+ local i, nus, new_coeff:
+
+ #print("coeff is", coeff):
+ nus := [nu1, nu2, nu3, nu4, nu5]:
+
+ new_coeff := coeff:
+ 
+ for i from 1 to nops(nus) do
+   new_coeff:= eval(new_coeff, nus[i] = nus[i] + shifts[i]):
+ od:
+
+ #print("new_coeff", new_coeff):
+ return new_coeff:
+end proc:
+
+
+# Shifts the term in the ibp (coeff*integral)
+
+shift_index:= proc(term, shifts)
+ local i, intgrl, coeff, nus, shifted_coeff:
+
+ intgrl:= op(indets(term, specfunc(SC))):
+ coeff:= term/intgrl:
+ nus := [op(intgrl)]:
+
+ shifted_coeff := shift_coeff(coeff, shifts):
+ 
+ for i from 1 to nops(nus) do
+   nus[i] := nus[i] + shifts[i]:
+ od:
+
+
+ return shifted_coeff*SC(op(nus)):
+end proc:
+
+
+
+# Shifts the entire expression ibp with supplied shift
+
+shift_equation := proc(ibp, shifts)
+ local t, term, expr; 
+ expr:= 0:
+
+ #print("ibp and shift in shift eq", ibp, shifts):
+
+ for term in ibp do  
+   t := shift_index(term,shifts):
+   expr:= expr + t:
+ od:
+ #print("shifted ibp in shift_equation:", expr):
+ return expr:
+end proc:
+
+
+
+# This function will globally shift the set of the initial ibp expressions
+# (basically use a different seed than [nu1, nu2, nu3, nu4, nu5])
+
+shift_all_ibps_for_seed:= proc(shifts, ibps)
+ local nu, ibp, shifted_ibps:
+
+ shifted_ibps:= []:
+
+ for ibp in ibps do
+  ibp:= shift_equation(ibp, shifts):
+  shifted_ibps:= [op(shifted_ibps), ibp]:
+ od:
+ 
+ #print("shifted ibp in shift eq:", shifted_ibps):
+ return shifted_ibps:
+end proc:
+
+
+
+# This function shifts the appropriate indices that the rhs integral of highest priority in the equation has
+# to (0,0,0,0,0), so it can be used for reduction
+# The ibp that the function is called with is of form (coeff* higest_int = rhs)
+# the output is an EXPRESSION shifted(rhs) - shifted(lhs) where lhs = coeff*SC(nu1, nu2, nu3 nu4, nu5)
+
+
+shift_equation_for_highest_priority := proc(sector, ibp)
+
+  local reduction_equation, shift, lhs_int, lhs_indices, opposite_shift, shifted_eq:
+  reduction_equation := ibp:
+
+  lhs_int:= op(indets(lhs(reduction_equation), specfunc(SC))):
+  lhs_indices := [op(lhs_int)[1], op(lhs_int)[2], op(lhs_int)[3], op(lhs_int)[4], op(lhs_int)[5]]:
+  
+
+  shift := determine_shift_for_highest_priority(sector, lhs_indices):
+  #print("shift of eq is", shift):
+
+  opposite_shift := map(x -> -x, shift):
+  shifted_eq := shift_equation(expand(rhs(reduction_equation) - lhs(reduction_equation)), opposite_shift):
+  
+  return shifted_eq:
+end proc:
+
+
+
+# This function has to figure out what the actual shift that has to be applied to the rhs ints is
+# based on the lhs int
+
+determine_shift_for_highest_priority := proc(sector, nus)
+ local sig, ind_shift, actual_shift, i: 
+
+ sig := index_signature(sector, nus):
+ ind_shift := index_shift(sector, nus, sig):
+
+ actual_shift := []:
+ 
+ for i from 1 to nops(ind_shift) do
+  if (sig[i] = 0) then
+   actual_shift := [op(actual_shift), ind_shift[i]]:
+  else 
+   actual_shift := [op(actual_shift), 0]:
+  fi:
+ od:
+
+ return actual_shift:
+end proc:
+
+
+# This function shifts the reduction rule so that lhs is always SC(nu1, nu2, nu3, nu4, nu5)
+# The actual shift is done with shift_equation_for_highest_priority 
+# The output is a list of SC(nu1, nu2, nu3, nu4, nu5) = shifted_rhs/shifted_coeff 
+# and the applicability condition of each rule
+# The rules supplied to the function are of form coeff*higest_int = rhs 
+
+
+shift_rules:= proc(sector, rules)
+ local r, rule, lhs_int, shifted_rule, shifted_rules, shifted_rule_eq, shift_rules_eq, applicability_conditions, isolated_shifted_rules:
+ local ulhs_int, slhs_int, ulhs_inds, shift, opposite_shift, new_rule, term, new_rhs, lhs_coeff:
+
+ shifted_rules:= []:
+ isolated_shifted_rules:= []:
+ shift_rules_eq:= []:
+
+ for r in rules do
+  shifted_rule:= expand(shift_equation_for_highest_priority(sector, r)): # is an expression (=0), not an equation lhs=rhs
+  shifted_rules:= [op(shifted_rules), shifted_rule]:
+
+  ulhs_int := op(indets(lhs(r), specfunc(SC))):
+  ulhs_inds := [op(ulhs_int)[1], op(ulhs_int)[2], op(ulhs_int)[3], op(ulhs_int)[4], op(ulhs_int)[5]]:
+  shift := determine_shift_for_highest_priority(sector, ulhs_inds):
+  opposite_shift := map(x -> -x, shift):
+
+  lhs_int := collect(shifted_rule, specfunc(SC), factor): # This is equation form lhs=rhs  
+  lhs_int := simplify(select(has, lhs_int, SC(op(ulhs_inds + opposite_shift)))):
+  shifted_rule_eq:= simplify(-lhs_int) = simplify(shifted_rule - lhs_int):
+  shift_rules_eq:=  [op(shift_rules_eq), shifted_rule_eq]:
+ od:
+
+ #print("shifted rule in shift_rules:", shift_rules_eq):
+ applicability_conditions := determine_conditions_for_rules(sector, shift_rules_eq, rules):
+
+ local terms: 
+
+ for rule in shift_rules_eq do
+  #print("rule", rule):
+  slhs_int := op(indets(lhs(rule), specfunc(SC))):
+  lhs_coeff := lhs(rule)/slhs_int:
+
+  #print("lhs int and coeff", slhs_int, lhs_coeff):
+  new_rhs := 0:
+  
+  terms := if type(rhs(rule), `+`) then [op(rhs(rule))] else [rhs(rule)] end if:
+  for term in terms do 
+   #print(term):
+   new_rhs := new_rhs + simplify(term/lhs_coeff):
+  od:
+
+  new_rule := slhs_int = new_rhs:
+  isolated_shifted_rules:= [op(isolated_shifted_rules), new_rule]:
+ od:
+
+
+ #print("shited rules", shift_rules_eq):
+ #print("isolated_shifted_rules:", isolated_shifted_rules):
+ return isolated_shifted_rules, applicability_conditions:
+end proc:
+
+
+
+ # -----------------------------------  APPLICABILITY CONDITIONS FOR THE RULES ----------------------------------
+
+
+# Receives unshifted and already shifted rule both in forms coeff*llhs = rhs and sector, 
+# determines whether the rule is applicable in that sector
+
+
+determine_conditions_for_rules:= proc(sector, shifted_rules, unshifted_rules)
+ local rule, conditions, i, shifted_rule, unshifted_rule:
+
+ conditions:= []:
+ 
+ for i from 1 to nops(shifted_rules) do
+  #print("in determine_conditions_for_rules"):
+  #print(rule):
+  shifted_rule:= shifted_rules[i]:
+  unshifted_rule:= unshifted_rules[i]:
+  conditions:= [op(conditions), applicability_of_rule(sector, shifted_rule, unshifted_rule)]:
+ od:
+
+ return conditions:
+end proc:
+
+
+# Receives a shifted rule and the unshifted version of the rule both in equation form coeff*lhs = rhs
+# returns the conditions for applicability of the rule in that sector as lists 
+
+applicability_of_rule := proc(sector, shifted_rule, unshifted_rule)
+ local conds, ulhs_int, ulhs_shift, ulhs_opshift, problem_index, urhs_shift, term, found, not_zero_index:
+ local nu, RHS, k, i, j, ulhs_inds, ulhs_sig, allowed, allowed_values, val, terms, urhs_int, urhs_coeff:
+ local neg_ind_in, pos_ind_in, number_total_increases, new_neg_in, new_pos_in, add_cond, problem:
+
+ #print("unshifted and shifted rules", unshifted_rule, shifted_rule):  
+
+ conds:= {}:
+ problem_index:= []:
+ not_zero_index:= []:
+ found := false:
+ nu:= [nu1, nu2, nu3, nu4, nu5]:
+ neg_ind_in := []:
+ pos_ind_in := []:
+ problem := false:
+ 
+ #print("rules", shifted_rule, unshifted_rule):
+
+ ulhs_int:= op(indets(lhs(unshifted_rule), specfunc(SC))):
+ ulhs_sig := index_signature(sector, [op(ulhs_int)]):
+ ulhs_shift:= determine_shift_for_highest_priority(sector, [op(ulhs_int)]):
+ ulhs_opshift := map(x -> -x, ulhs_shift):
+
+ for i from 1 to nops([op(ulhs_int)]) do
+  if (sector[i] = 0 and ulhs_shift[i] < 0 and ulhs_sig[i] = 0) then
+   problem_index:= [op(problem_index), i]:
+  fi:
+ od:
+
+ RHS:= expand(rhs(unshifted_rule)):
+ #print(RHS):
+ RHS:= collect(RHS, indets(RHS, specfunc(anything, SC))):  
+ #print("RHS", RHS):
+
+ if op(0, RHS) = `+` then
+    terms := [op(RHS)]:
+ else
+    terms := [RHS]:
+ fi:
+
+ #print("converted", terms):
+
+ for term in terms do
+  #print("term", term):
+  #urhs_int := op(indets(term, specfunc(SC))):
+  #urhs_coeff := term/urhs_int:
+  urhs_shift := determine_shift_for_highest_priority(sector, [op(op(indets(term, specfunc(SC))))]):
+
+  #number_total_increases := 0:
+  new_pos_in := []:
+  new_neg_in := []:
+
+  for i from 1 to nops(urhs_shift) do
+   if (ulhs_sig[i] = 0 and sector[i] = 0 and urhs_shift[i]> 0) then
+    new_neg_in := [op(new_neg_in), i]:
+   elif (ulhs_sig[i] = 0 and sector[i] = 1 and urhs_shift[i]> 0) then
+    new_pos_in := [op(new_pos_in), i]:
+   fi:
+  od: 
+
+  if not (nops(new_neg_in) + nops(new_pos_in) > 1) then 
+   neg_ind_in := [op(neg_ind_in), op(new_neg_in)]:
+   pos_ind_in := [op(pos_ind_in), op(new_pos_in)]:
+  fi:
+
+  for k in problem_index do
+   if (urhs_shift[k] + ulhs_opshift[k] > 0) then
+    found:= true:
+    not_zero_index:= [op(not_zero_index), k]:
+   fi:
+  od:
+ od: 
+
+ if nops(neg_ind_in) = nops(terms) then
+  problem := true:
+ fi:
+
+ pos_ind_in := convert(pos_ind_in, set):
+ neg_ind_in := convert(neg_ind_in, set):
+ add_cond := []:
+
+ if not (neg_ind_in = {} and pos_ind_in = {}) then
+  if pos_ind_in = {} and neg_ind_in <> {} and problem then
+   for i in neg_ind_in do
+    add_cond := [op(add_cond), nu[i] <> 0]:
+   od:
+   conds := conds union {["zero rhs", add_cond]}:
+  #filtered := select(r -> indets(r, name) subset {nu1, nu2, nu3, nu4, nu5}, conds):
+  fi:
+ fi:
+
+
+ if found then
+  for i in not_zero_index do
+   allowed := ulhs_shift[i]:
+   #print("allowed", allowed):
+   allowed_values := [seq(j, j = allowed+1 .. 0)]:
+   for val in allowed_values do
+    #print("problem in crossing sector border when you have to shift"):
+    conds:= conds union {["crossing sector border upwards", nu[i] <> val]}:
+   od:
+  od:
+ fi:
+ 
+
+ local slhs_coeff, slhs_int, den, shifted_r:
+
+ if type(rhs(shifted_rule), `*`) then 
+  den := denom(rhs(shifted_rule)):
+ fi:
+
+ shifted_r := lhs(shifted_rule)*den = rhs(shifted_rule)*den:
+
+ slhs_int:= op(indets(lhs(shifted_r), specfunc(SC))):
+ #print(slhs_int):
+ slhs_coeff := lhs(shifted_r)/slhs_int:
+ slhs_coeff:= simplify(slhs_coeff):
+
+ conds:= conds union determine_conds_for_factor(sector, numer(slhs_coeff)):
+
+ #print("the rules conds are", conds):
+ return conds:
+end proc:
+
+
+
+# This function receives the coeff in the reduction rule: coeff*lhs = rhs and determines when a division by zero might happen
+# returns a set of lists that tells you the case of factor = 0 for each factor in coeff. 
+
+determine_conds_for_factor := proc(sector, expr)
+  local fact, i, j, factrs, conds, nu, indet, problem:
+
+  factrs:= op(2,factors(expr)):
+  #print(factrs):
+  conds:= {}:
+  problem := false:
+
+  nu:= [nu1, nu2, nu3, nu4, nu5]:
+
+  for i from 1 to (nops(factrs)) do
+   fact := op(1,factrs[i]):
+   #print("factor is", fact):
+   indet := indets(fact):
+   
+   if not indet subset convert(nu, set) and not indet = {} then
+     #print("condition includes D, Q or Ms"):
+     conds:= conds union {["possible division by zero", fact <> 0]}:
+     problem := true:
+   fi:
+
+   indet := indet intersect convert(nu, set):
+   #print("indets", indet):
+
+   if not problem and not is(fact, 'constant') then
+    
+     if nops(indet) = 1 then
+     
+      for j from 1 to nops(nu) do
+
+       if op(indet) = nu[j] then
+        
+        if sector[j] = 0 then
+         conds:= conds union {["lhs of equation is zero", nu[j] <> 0]}:
+        elif sector[j] = 1 then
+         conds:= conds union {["possible division by zero", fact <> 0]}:
+        fi:
+       fi:
+      od:
+     else
+      
+      conds:= conds union {["possible division by zero", fact <> 0]}:
+     fi:
+    fi:
+    problem := false:
+  od:
+
+  #print("determine cond for factor", conds):
+  return conds:
+end proc:
+
+
+
+# ---------------------------------------- MATRIX MANIPULATIONS -----------------------------------------------------
+
+# Supply ibps in equation form (coeff*highest = rhs), not raw expressions!
+# get back only the matrix form, not triangular
+# the arguments it returns are the matrix, the rhs vector (zero vector when you supply expression ibps) and
+# a vector of all the integrals in the ibps
+
+get_matrix_from_eqs:= proc(sector, ibps)
+ local eqs, vars, A:
+
+ eqs:= sort_eqs_in_order(sector, ibps):
+ vars:= sort_all_ints_in_system(sector, ibps):
+
+ eqs:= map(lhs-rhs, eqs):
+
+ A := GenerateMatrix(eqs, vars): # Gives both A and the rhs vector (that you would get when A*vars = rhs vector)
+ #print(A):
+
+ return A, Vector(vars):
+end proc:
+
+
+# This is am unfinished back substitution procedure we don't use in the end, 
+# because it reduces efficiency
+
+# Supply triagonal matrix of ibps and all ints in the system as matrix and vector
+# does back substitution and returns the diagonal matrix, zero vector and vector of integrals again.
+
+back_substitute := proc(sector, triag_mat, ints)
+ local eqs_vector, expr, i, sorted_eq, lhs_ints, compare, sorted_lhs, eqs, back_sub_eqs, subs_map, sub_eq, ex:
+
+ lhs_ints:= []:
+ eqs:= []:
+ back_sub_eqs:= []:
+ subs_map := {}:
+
+ eqs_vector := MatrixVectorMultiply(triag_mat, ints):
+
+ for i from 1 to Dimension(eqs_vector) do
+  expr := eqs_vector[i]:
+  sorted_eq := sort_ints_in_eq_not_isolate(sector, expr):
+  lhs_ints:= [op(lhs_ints), op(indets(lhs(sorted_eq), specfunc(SC)))]:
+  eqs := [op(eqs), expr = 0]:
+ od:
+ 
+ (*
+ lhs_int := collect(expr, SC(op(higher)), factor):  # This is equation form lhs=rhs
+ lhs_int := simplify(select(has, lhs_int, SC(op(higher)))):
+ sorted_eq:= simplify(-lhs_int) = simplify(expr - lhs_int): *)
+
+ #print("non_reversed", eqs):
+ eqs := Reverse(eqs):
+ #print("reversed", eqs):
+ lhs_ints:= Reverse(lhs_ints):
+
+ sub_eq := sort_ints_in_eq(sector, rhs(eqs[1]) - lhs(eqs[1])):
+ subs_map := subs_map union {sub_eq}:
+ back_sub_eqs:= [op(back_sub_eqs), sort_ints_in_eq_not_isolate(sector, simplify(rhs(eqs[1]) - lhs(eqs[1])))]:
+
+ local sub:
+
+for i from 2 to nops(eqs) do
+    ex := simplify(rhs(eqs[i]) - lhs(eqs[i])):
+    for sub in subs_map do
+     ex := algsubs(sub, ex):
+    od:
+    back_sub_eqs:= [op(back_sub_eqs), sort_ints_in_eq_not_isolate(sector, ex)]:  
+    sub_eq:= sort_ints_in_eq(sector, ex):
+    subs_map := subs_map union {sub_eq}:
+od:
+
+return get_matrix_from_eqs(sector, back_sub_eqs):
+end proc:
+
+
+# This function returns only the final (triagonal and back substituted) matrix with the reduction equations
+# supply the raw expression ibps and the sector
+
+get_final_matrix := proc(sector, raw_ibps)
+ local rules, mat, ints, triag_mat, gauss_elim:
+
+ rules:= find_reduction_ibps(sector, raw_ibps): # coeff*highest = rhs
+ mat:= get_matrix_from_eqs(sector, rules):
+ ints:= mat[3]:
+ mat:= mat[1]:
+ #print("coeff mat is", mat):
+ gauss_elim:= GaussianElimination(mat):
+ triag_mat := LUDecomposition(mat):
+
+ # Output LUDecomposition is P, L, U where P*mat = L*U, L = lower triang, U = upper triang (the one we want), P.. Permutation matrix
+ # we could use P^-1 = P^T so mat = (P^T*L) * U but then L is not lower triangle anymore
+
+ #return back_substitute(sector, gauss_elim, ints):
+ return triag_mat, ints:
+
+end proc:
+
+
+ # ------------------------------------- ADD IBPS FOR DIFFERENT SEEDS ---------------------------------------------------
+
+
+# This function creates all shifts that we will use as seeds for ibps we add to the set of already diagonalized ibps, 
+# seeds are created based on a depth you supply to the function, meaning depth is the sum of absolute values of the shifts
+# depth 2 creates +/- 2 shifts as well as +/-1 +/- 1 shifts
+# (in two places, even if priority gets increased/create unwanted shift)
+# sector is supplied only so that the created shifts get sorted according to the ordering at the end. 
+# Output is SORTED list of all shifts at that depth (sorted wrt sector and our implemented priority)
+
+create_all_shifts := proc(sector, depth)
+ local shift_set, j, shift, new_shift, idxs, k, comb_shifts, comp, parts, signs, v, i, compare:
+
+ shift_set := {}:
+ shift := [0,0,0,0,0]:
+ comb_shifts := []:
+
+ # Add combined shifts for depth > 1
+
+ local T, t:
+
+    # number of nonzero positions
+    for k from 1 to min(nops(shift), depth) do
+
+        # compositions of depth into k positive integers
+        for comp in combinat[composition](depth, k) do
+
+            # choose k distinct positions
+            for idxs in combinat[choose]([seq(i,i=1..nops(shift))], k) do
+       
+                # assign signs
+                T:= combinat[cartprod]([[-1,1]$k]):
+                t:= []:
+                while not T[finished] do 
+                  t:= [op(t),T[nextvalue]()]:
+                  od: 
+
+                for signs in t do
+
+                    v := [0$nops(shift)]:
+                    for i from 1 to k do
+                        v[idxs[i]] := signs[i]*comp[i]:
+                    od:
+
+                    comb_shifts := [op(comb_shifts), v]:
+
+                od:
+            od:
+        od:
+    od:
+
+  compare:= myCompare_shifts(sector):
+
+  # This might need to be only sort, but it doesn't do what I want it to sometimes. 
+ return :-sort(comb_shifts, compare):
+end proc:
+
+
+
+
+# ----------------------------------- RULE BRANCHING WITH CONDITIONS ----------------------------------
+
+# I want this function to only do what determine_conditions_for_rules does but for one rule at a time
+# so it will call determine_conditions_for_rules with a list consisting of only one rule
+# and return only the condition
+# the rule supplied will be in expression form from matrixes
+
+
+find_cond_for_rule := proc(sector, rule)
+ local cond, ibp, shifted, filtered, i, condition, conds, c: 
+
+ #print("rule in find cond for rule", rule):
+ ibp := sort_ints_in_eq_not_isolate(sector, rule):
+ #print("ibp is", ibp):
+ shifted := shift_rules(sector, [ibp]):  # has to have input of form coeff*lhs = rhs
+ 
+ #print("shifted", shifted):
+
+ cond := convert(op(shifted[2]), list):  
+ shifted:= shifted[1]:         # form SC(nu1, nu2, nu3, nu4, nu5) = ...
+ conds := []:
+ #print("condition for rule", cond, rule):  
+ #print("shifted rule is", shifted):
+ for i in cond do
+   condition := []:
+   #print("i",i):
+   condition := [op(condition), i[2]]:
+   conds := [op(conds), condition]:
+  od:
+  #print("conds are", conds):
+ filtered := select(r -> indets(r, name) subset {nu1, nu2, nu3, nu4, nu5}, conds):
+
+ #print("filtered", filtered):
+
+ return filtered:
+end proc:
+
+
+
+# this function should receive the next rule and add the condition to the already existing branch 
+# and even split it if needed, so that two separate branches are created if necessary
+
+# Conds input is a list of lists where every list has only one condition in form smth <> 0
+# The combined condition is smth <> 0 AND smthelse <> 0
+# then you translate those to smth = 0 OR smthelse = 0
+
+
+add_branch_cond := proc(old_branch, conds)
+  local nnconds, new_branches, opposite_conds, c, all_conds, i, expr, new_branch:
+
+  #print("conds in add branch conds", conds):
+
+  # I hope this is correct, if I have a rule with a zero operator on lhs then there will be no condition
+  if conds = [] then
+   print("valid zero operator rule"):
+   return 0:
+  fi:
+
+  new_branches := []:
+  opposite_conds := []:
+  nnconds := nops(conds):
+  all_conds :=  []:
+  new_branch := []:
+  
+  for c in conds do
+   all_conds := [op(all_conds), op(c)]:
+  od:
+
+  if nnconds = 0 then
+   return old_branch:
+  fi:
+
+  if nnconds = 1 then
+   if nops(op(conds)) = 1 then
+    return [[op(old_branch), isolate(lhs(op(op(conds))) = rhs(op(op(conds))), op(1, indets(op(op(conds)))))]]:
+   
+   elif nops(op(conds)) > 1 then
+    for i from 1 to nops(op(conds)) do
+     expr := op(conds)[i]:
+     new_branch := [op(new_branch), isolate(lhs(expr) = rhs(expr), op(1, indets(expr)))]:
+    od:
+    return [[op(old_branch), op(new_branch)]]:
+   fi:
+  fi:
+
+  # Split the branch into multiple branches if there are multiple new conditions
+
+  for c in all_conds do
+   c := isolate(lhs(c) = rhs(c), op(1, indets(c))):
+   opposite_conds:= [op(opposite_conds), c]:
+  od:
+
+  for c in opposite_conds do
+   new_branches := [op(new_branches), [op(old_branch), c]]:
+  od:
+  
+  return new_branches:
+end proc:
+
+
+# This function receives the sector, branch and seed (if there is one) and
+# creates the original (shifted and potentially numeric) ibps, returns them
+
+
+create_branch_ibps:= proc(branch, seed)
+ local ibps, nus, subsmap, s:
+
+ nus := [nu1, nu2, nu3, nu4, nu5]:
+ subsmap:= convert(branch, set):
+
+ for s in subsmap do
+  nus := algsubs(s, nus):
+ od:
+
+ nus := nus + seed:
+
+ # Here the non-zero masses we want for the sun-cut topology need to be adjusted. 
+
+ ibps := IBPS(op(nus), M1, 0, M3, 0, M5, Q, D):
+
+ return ibps:
+end proc:
+
+
+
+# This function should look at all the newly created and triagonalized branched ibps
+# and determine which rule can be applied for reducing another new index 
+# not already restricted by the branch condition
+# the lhs integral has to obey the branch conditions, the rhs can include anything.
+# Returns the branch in which it is valid, the rule and the new condition of that rule
+
+
+filter_branched_rules := proc(sector, triag_mat, ints, branch)
+ local ibps, rule_exps, exp, rules_eqs, eq, lhs_ints, cond, nus, i, j, min_conds, highest:
+ local signature, filtered_lhs, term, lhs_indices, found, c, conds, cond_num, index, num_indets_cond:
+ local rule, denoms, numers, int_SC, coeff, rule_exps2, cd, cf, sim_rule, d, dens, terms, k:
+
+ rules_eqs := []:
+ lhs_ints := []:
+ filtered_lhs := []:
+ conds := []:
+ cond_num :=  []:
+ index :=  []:
+ rule_exps2 := []:
+
+ #print("triag mat and ints in filter is", triag_mat, ints):
+ rule_exps := convert(MatrixVectorMultiply(triag_mat, ints), list):
+ #print("raw rules", rule_exps):
+
+
+ # THIS IS NOT CORRECT, have to deal with this differently! 
+
+ # Check if any rule has only one term 
+ k := 1:
+ while k <= nops(rule_exps) do
+  rule := rule_exps[k]:
+
+  if op(0, rule) = `+` then
+     terms := [op(rule)]:
+  else
+     terms := [rule]:
+  fi:
+
+  if nops(terms) < 2 then
+   print("single integral rule encountered in ", branch, rule):
+   #rule_exps := subsop(k = NULL, rule_exps):
+  else
+    k := k + 1:
+  fi:
+ od:
+
+ local facts, fc, f:
+
+
+ for rule in rule_exps do
+  #print("the rule is", rule):
+  denoms := []:
+  numers := []:
+  dens:= []:    
+  for term in rule do
+   int_SC := op(indets(term, specfunc(SC))):
+   coeff := term / int_SC:
+   denoms := [op(denoms), denom(coeff)]:
+  od:
+  #print("denoms", denoms):
+  for d in denoms do
+   dens := [op(dens), factor(d)]:
+  od:
+  #print("factored denoms", dens):
+  #cd := gcd(op(denoms)): 
+  if member(1, convert(denoms, set)) then
+   cd := 1:
+  else
+   #print("denominators are", op(denoms)):
+
+   facts := map(Factors, denoms):
+   fc := facts[1]:
+
+   for i from 2 to nops(facts) do
+    fc := select(f -> member(f, facts[i]), fc):
+   od:
+
+   cd := mul(f, f in fc):
+  fi:
+  #print("cd", cd):
+  sim_rule := simplify(rule*cd):
+  sim_rule := collect(sim_rule, specfunc(SC), factor):
+  rule_exps2 := [op(rule_exps2), sim_rule]:
+ od:
+ 
+ #print("after denom manipulation", rule_exps2):
+
+ nus := [nu1, nu2, nu3, nu4, nu5]:
+ found := false:
+ rule_exps := rule_exps2:
+
+
+ for exp in rule_exps do
+  #print("exp", exp):
+  eq := sort_ints_in_eq_not_isolate(sector, exp):
+  rules_eqs := [op(rules_eqs), eq]:
+  lhs_ints := [op(lhs_ints), op(indets(lhs(eq), specfunc(SC)))]:
+ od:
+
+ signature := index_signature(sector, [op(lhs_ints[1])]):  # All integrals should have the same signature!
+
+ for cond in branch do 
+  nus := algsubs(cond, nus):
+ od: 
+
+
+ for term in lhs_ints do
+  found := false:
+  lhs_indices := [op(term)]:
+
+  for i from 1 to nops(nus) do
+
+   if signature[i] = 1 then 
+
+    if nus[i] <> lhs_indices[i] then
+     found:= true:
+     break:
+    fi:
+
+   fi:
+  od:
+  
+  if not found then
+   filtered_lhs:= [op(filtered_lhs), term]: 
+  fi:
+
+ od:
+
+ filtered_lhs := convert(filtered_lhs, set):
+ #print("the integrals on the lhs that fit are", filtered_lhs):
+
+ if convert(filtered_lhs, list) = [] then
+  #print("no rule in unseeded ibps or at this seed"):
+  return branch, 0, []:
+ fi:
+
+
+ for i from 1 to nops(rules_eqs) do
+  if member(op(indets(lhs(rules_eqs[i]), specfunc(SC))), filtered_lhs) then
+   #print("rules is", rule_exps[i]):
+   c := find_cond_for_rule(sector, rule_exps[i]):
+   #print("cond for rule is", c, rule_exps[i]):
+   if not nops(c) > 1 and not nops(c) = 0 then
+    if type(op(op(c)), list) then
+     c := op(c):
+     #print("fix", c):
+    fi:
+   fi: 
+   #print(c):
+   #print(nops(c)):
+   conds := [op(conds), c]:
+   cond_num := [op(cond_num), nops(c)]:
+   index := [op(index), i]:
+  fi:
+ od:
+ #print("all conds", conds):
+ #print("cond numbers", cond_num):
+ min_conds := min(op(cond_num)):
+
+ if cond_num = [] and nops(branch) = 5 then
+  min_conds := 0:
+ fi:
+ #print("min_conds is", min_conds):
+
+ # I think this only works for not-fully numeric indices! Figure out how to do it in this case! 
+ (*
+ if min_conds = 0 and sector <> [1,1,1,1,1] and nops(branch) <> 5 then 
+  min_conds := 1:
+ fi: 
+ *)
+ #print("min conds after check is", min_conds):
+ for i from 1 to nops(index) do
+  c := conds[i]:
+  #print("conds for rule candidate",c):
+  #print("indets", indets(c[1])):
+  num_indets_cond := []:
+
+  for j from 1 to nops(c) do
+   if nops(c) > 1 then
+    num_indets_cond := [op(num_indets_cond), nops(indets(op(c[j])) intersect convert(nus, set))]:
+   elif nops(op(c)) = 1 then
+    num_indets_cond := [op(num_indets_cond), nops(indets(op(c[j])) intersect convert(nus, set))]:
+   elif nops(op(c)) > 1 then
+    num_indets_cond := [op(num_indets_cond), nops(op(c))]:
+   fi:
+  od:
+  #print("num_indets_cond", num_indets_cond):
+  highest := max(op(num_indets_cond)):
+  if num_indets_cond = [] then
+    highest := 0:
+  fi:
+  #print("highest is", highest):
+  if cond_num[i] = min_conds and highest < 2 then
+   return branch, rules_eqs[index[i]], conds[i]:
+  fi:
+ od:
+ 
+ #print("no rule in unseeded ibps or at this seed"):
+ return branch, 0, []:
+end proc:
+
+
+
+
+# I want this function to only receive sector and branch, and then return a reduction rule for 
+# that branch and sector and the new conditon under which it can be applied. Then this function is recursivelly
+# called for the new branch conditons
+
+# returns a list of form [branch, rule, condition] where cond is list of lists 
+
+find_rule_for_branch := proc(sector, branch)
+ local i, triag, ints, mat, rule, cond, old_branch:
+ local found, seeds, seed, depth, rules, old_ibps, new_ibps, nu, b, sig, j, bad_seed:
+
+ #print("branch", branch):
+
+ found := false:
+ bad_seed := false:
+ depth := 1:
+ seed := [0,0,0,0,0]:
+ nu := [nu1, nu2, nu3, nu4, nu5]:
+
+ for b in branch do
+  nu := algsubs(b, nu):
+ od: 
+ #print("branched nus", nu):
+
+ sig := index_signature(sector, nu):
+ #print("signature", sig):
+
+ old_ibps := create_branch_ibps(branch, seed):
+ #print("branched ibps", old_ibps):
+
+ mat := get_final_matrix(sector, old_ibps):
+ triag := mat[3]:
+ triag := remove_zero_rows(triag):
+ ints := mat[4]:
+ #print("matrix is", triag, ints):
+
+ # I need to run filter_branched_rules to determine if there is a rule before I seed
+  #print("before seeding at this branch"):
+  old_branch, rule, cond := filter_branched_rules(sector, triag, ints, branch):
+  #print("first rule in find branch rules", rule):
+  #print("first cond in find branch rules", cond):
+  if (rule <> 0) then 
+   #print("rule not zero"):
+   rules := [branch, rule, cond]:
+   #print("return", rules):
+   return rules:
+  fi:
+
+  #print("start seeding ibps"):
+  local count := 1:
+
+ if (cond = [] and rule = 0) then
+  while not found do
+   (*
+   if depth > 2 then
+    print("depth limit of 2 reached"):
+    break:
+   fi:
+   *)
+   seeds := create_all_shifts(sector, depth):
+   #print("the total number of seeds is", nops(seeds)):
+
+   # Maybe here filter out seeds that jump the sector border (?)
+   for seed in seeds do
+    (*
+    bad_seed := false:
+    #print("depth is", depth):
+   
+    for j from 1 to nops(nu) do
+     if (sig[j] = 1 and sector[j] = 0 and seed[j] > 0) then 
+      bad_seed := true:
+     fi:
+    od:
+    if bad_seed then 
+     #print("bad seed", seed):
+     next:
+    fi:
+    *)
+    #print("seed", seed):
+    new_ibps := create_branch_ibps(branch, seed):
+    #print("branched ibps in seed",seed, branch, "are", new_ibps):
+    #print("new ibp matrix", get_final_matrix(sector, [op(new_ibps)])[3]):
+    mat := get_final_matrix(sector, [op(old_ibps), op(new_ibps)]):
+    triag := mat[3]:
+    ints := mat[4]:
+    #print("matrix in",branch,"with seed", seed, " is", triag, ints):
+    triag := remove_zero_rows(triag):
+    #print("matrix in",branch,"with seed", seed, " is", triag, ints):
+    #print(triag, ints):
+    #print(member(0, convert(MatrixVectorMultiply(triag, ints), set))):
+    old_branch, rule, cond := filter_branched_rules(sector, triag, ints, branch):
+    if (rule <> 0) then 
+      found := true:
+      rules := [old_branch, rule, cond]:
+      break:
+    fi:
+    old_ibps := [op(old_ibps), op(new_ibps)]:
+    count := count +1: 
+   od:
+   depth := depth + 1:
+  od:
+ fi:
+ return rules:
+
+end proc:
+
+
+# Removes zero rows from triagonal matrix to avoid problems in further processing, returns the matrix
+
+remove_zero_rows := proc(M)
+ local rows, nonzero, i, j:
+
+ rows := RowDimension(M):
+ nonzero := []:
+
+ for i from 1 to rows do
+  if not evalb(add(abs(M[i,j]), j=1..ColumnDimension(M)) = 0) then
+   nonzero := [op(nonzero), i];
+  fi:
+ od:
+
+ return M[nonzero, ..]:
+end proc:
+
+
+
+solve_sector := proc(sector)
+ local branch, rules, new_rules, b, r, c, all_rules, rule, cond, new_branches, rules_and_conds:
+ local final_result, i, next_branch:
+
+ rules_and_conds := []:
+ final_result := []:
+
+ branch := []:
+ i := 1:
+
+ branch, rule, cond := op(find_rule_for_branch(sector, branch)):
+
+ # Maybe have to modify this rules cond if sector isn't top one. Have to modify applicability_conditions
+
+ rules_and_conds := [op(rules_and_conds), [rule, branch, cond]]:
+
+ # Figure out which indices are potentially problematic
+ 
+ if cond = [] and sector = [1,1,1,1,1] then 
+  print("sector solved with first rule"):
+  return rules_and_conds:
+ fi:
+
+ #print("in solved sector after first run", rules_and_conds):
+ 
+ new_branches := add_branch_cond(branch, cond):
+ 
+ local branches_to_add:
+ 
+ while not solved(sector, branch, cond) or i <= nops(new_branches) do
+  #print("branch,rule and cond", branch, rule, cond):
+  #print("how many branches I have", nops(new_branches)):
+  next_branch := new_branches[i]:
+  
+  if nops(next_branch) = 5 then 
+   #print("reached fully numeric cases"):     
+   #print("branches are", new_branches):
+   local full_branch:
+    for full_branch in new_branches do
+       if nops(full_branch) = 5 then
+         branch, rule, cond := op(find_rule_for_numeric_case(sector, full_branch)):
+
+         if not (branch = 0 and rule = 0 and cond = 0) then
+          rules_and_conds := [op(rules_and_conds), [rule, branch, cond]]:
+         fi:
+       fi:
+    od:
+    return rules_and_conds:
+  fi: 
+  
+  #print("next branch", next_branch):
+  #print("_______________next branch______________________", next_branch):
+  branch, rule, cond := op(find_rule_for_branch(sector, next_branch)):
+  print("rule", rule):
+  rules_and_conds := [op(rules_and_conds), [rule, branch, cond]]:
+
+  branches_to_add := add_branch_cond(branch, cond):
+  #print("branches to add", branches_to_add):
+  if branches_to_add <> 0 then
+   new_branches := [op(new_branches), op(branches_to_add)]:
+  fi:
+  #print("new branches are", new_branches):
+  new_branches := MakeUnique(map(L -> sort(L), new_branches)):
+  #print("unique branches are", new_branches):
+  i := i+1:
+ od:
+
+ return rules_and_conds:
+end proc:   
+
+
+
+solved := proc(sector, branch, cond)
+ local nus, lhs_branches, lhs_cond, lhs_branches_set, pot_new_branch, c, b, i, lhs_c, nondet, cond_nus, tmp:
+ local branch_from_cond, lhs_b, j:
+ 
+
+ nus := [nu1, nu2, nu3, nu4, nu5]:
+ lhs_branches_set := {}:
+ lhs_branches := []:
+ lhs_cond := []:
+ pot_new_branch := []:
+
+ #print("cond in solved", cond):
+ 
+ # I think this can only happen when I have a zero operator on lhs
+ if cond = [] and sector = [1,1,1,1,1] then 
+  #print("check if lhs is zero operator"):
+  return true:
+ elif cond = [] then 
+  return true:
+ fi:
+
+ for b in branch do
+  lhs_b:= op(indets(lhs(b))):
+  lhs_branches := [op(lhs_branches), lhs_b]:
+ od:
+ 
+ lhs_branches_set := convert(lhs_branches, set):
+
+ # Probably unneccessary, since I check number of nondets below
+ if nops(cond) > 1 then
+  for c in cond do 
+   tmp := indets(op(c)) intersect convert(nus, set):
+   cond_nus := cond_nus union tmp:
+  od:
+ elif nops(op(cond)) = 1 then
+  cond_nus := indets(op(op(cond))) intersect convert(nus, set):
+ else 
+  for j from 1 to nops(op(cond)) do
+   tmp := indets(op(c)[j]) intersect convert(nus, set):
+   cond_nus := cond_nus union tmp:
+  od:
+ fi:
+ nondet := nops(cond_nus):
+ 
+
+ # this way, becasue if I have a condition like nu1 + nu3 - 2 <> 0 then only nu3 is undetermined
+ if nondet - 1 > 0 then
+  #print("not every index is determined"):
+  return false:
+ fi:
+ 
+ if (nops(lhs_branches_set) + nondet <> nops(nus)) or (cond_nus intersect lhs_branches_set <> {}) then
+  #print("have to further branch or am not at the end yet"):
+  return false:
+ fi:
+ #print("default true"):
+ return true:
+end proc:
+
+
+
+find_rule_for_numeric_case := proc(sector, branch)
+ local i, triag, ints, mat, rule, cond, old_branch:
+ local found, seeds, seed, depth, rules, old_ibps, new_ibps, nu, b, sig, j:
+
+ #print("branch", branch):
+
+ if nops(branch) <> 5 then
+  error "This branch is not fully determined":
+  return 0:
+ fi: 
+
+ found := false:
+ depth := 1:
+ seed := [0,0,0,0,0]:
+ nu := [nu1, nu2, nu3, nu4, nu5]:
+
+ for b in branch do
+  nu := algsubs(b, nu):
+ od: 
+ #print("branched nus", nu):
+
+ sig := index_signature(sector, nu):
+ #print("signature", sig):
+
+ old_ibps := create_branch_ibps(branch, seed):
+ #print("branched ibps", old_ibps):
+
+ mat := get_final_matrix(sector, old_ibps):
+ triag := mat[3]:
+ triag := remove_zero_rows(triag):
+ ints := mat[4]:
+ #print("matrix is", triag, ints):
+
+ # I need to run filter_branched_rules to determine if there is a rule before I seed
+  #print("before seeding at this branch"):
+  old_branch, rule, cond := filter_branched_rules(sector, triag, ints, branch):
+  #print("first rule in find branch rules", rule):
+  #print("first cond in find branch rules", cond):
+  if (rule <> 0) then 
+   #print("rule not zero"):
+   rules := [branch, rule, cond]:
+   #print("return", rules):
+   return rules:
+  fi:
+
+  #print("start seeding ibps"):
+
+  local count: 
+  count := 1: 
+
+ if (cond = [] and rule = 0) then
+  while not found do
+   if depth > 2 then
+    print("depth limit of 2 reached in numeric cases"):
+    return [0,0,0]:
+    break:
+   fi:
+   seeds := create_all_shifts(sector, depth):
+   #print("the total number of seeds is", nops(seeds)):
+
+   # Maybe here filter out seeds that jump the sector border (?)
+
+   for seed in seeds do
+    #print("depth is", depth):
+    #print("seed", seed):
+    new_ibps := create_branch_ibps(branch, seed):
+    #print("branched ibps in seed",seed, branch, "are", new_ibps):
+    #print("new ibp matrix", get_final_matrix(sector, [op(new_ibps)])[3]):
+    mat := get_final_matrix(sector, [op(old_ibps), op(new_ibps)]):
+    triag := mat[3]:
+    ints := mat[4]:
+    #print("matrix in",branch,"with seed", seed, " is", triag, ints):
+    triag := remove_zero_rows(triag):
+    #print(triag, ints):
+    #print("matrix in",branch,"with seed", seed, " is", triag, ints):
+    #print(member(0, convert(MatrixVectorMultiply(triag, ints), set))):
+    old_branch, rule, cond := filter_branched_rules(sector, triag, ints, branch):
+    if (rule <> 0) then 
+      found := true:
+      rules := [old_branch, rule, cond]:
+      break:
+    fi:
+    old_ibps := [op(old_ibps), op(new_ibps)]:
+    count := count +1: 
+   od:
+   depth := depth + 1:
+  od:
+ fi:
+ return rules:
+
+end proc:
+
+
+
+return_sector_rules := proc(solution)
+  local cur, rule, i, r,t:
+
+  #print("solution is", solution):
+
+  rule := []:
+
+  for i from 1 to nops(solution) do
+   cur := solution[i, 1]:
+   #r, t := simplify_coeffs(cur):
+   #print("the simplified coeff rule is", r):
+   rule := [op(rule),cur]:
+  od:
+
+  #print("rules in combine", rule):
+  return rule:
+end proc:
+
+
+
+simplify_coeffs := proc(eq)
+local lhs_expr, rhs_expr, lhs_SCs, rhs_SCs, coeff_tab, s, c, new_lhs, new_rhs, neweq, i, k, ai, coeff_list:
+
+lhs_expr := lhs(eq):
+rhs_expr := rhs(eq):
+
+if type(lhs_expr, `*`) and type(rhs_expr, `*`) and
+   denom(lhs_expr) <> 1 and simplify(denom(lhs_expr)/denom(rhs_expr)) = 1 then
+    lhs_expr := numer(lhs_expr):
+    rhs_expr := numer(rhs_expr):
+fi:
+
+lhs_expr := expand(lhs_expr):
+rhs_expr := expand(rhs_expr):
+
+lhs_SCs := sort([op(indets(lhs_expr, specfunc(anything, SC)))]):
+rhs_SCs := sort([op(indets(rhs_expr, specfunc(anything, SC)))]):
+
+coeff_tab := table():
+
+i := 1:
+
+new_lhs := 0:
+for s in lhs_SCs do
+    c := coeff(lhs_expr, s):
+    c := expand(c):
+    c := normal(c):
+    c := simplify(c, symbolic):
+    c := factor(c):
+    c := collect(c, [Q, M1, M3, M5, nu2, nu4, D], factor):
+
+    ai := parse(cat("a", i)):
+    coeff_tab[ai] := c:
+
+    new_lhs := new_lhs + ai*s:
+
+    i := i + 1:
+od:
+
+new_rhs := 0:
+for s in rhs_SCs do
+    c := coeff(rhs_expr, s):
+    c := expand(c):
+    c := normal(c):
+    c := simplify(c, symbolic):
+    c := factor(c):
+    c := collect(c, [Q, M1, M3, M5, nu2, nu4, D], factor):
+
+    ai := parse(cat("a", i)):
+    coeff_tab[ai] := c:
+
+    new_rhs := new_rhs + ai*s:
+
+    i := i + 1:
+od:
+
+neweq := new_lhs = new_rhs:
+#print("new eq is", neweq):
+
+coeff_list := []:
+#print("lhs sc is", lhs_SCs):
+
+
+local keys, sorted_keys, sorted_pairs, key_pairs:
+
+keys := [indices(coeff_tab)]:
+keys := map(x -> op(1, x), keys):
+
+key_pairs := map(k -> [parse(substring(convert(k, string), 2..-1)), k], keys);
+
+sorted_pairs := sort(key_pairs, (x, y) -> x[1] < y[1]);
+
+sorted_keys := map(x -> x[2], sorted_pairs);
+
+#print("sorted coeffs", sorted_keys):
+
+for k in sorted_keys do
+    coeff_list := [op(coeff_list), k = coeff_tab[k]]:
+od:
+
+#print("before returning results"):
+return neweq,  eval(coeff_list):
+
+end proc: 
+
+
+
+# ----------------------------------------------- TEST FUNCTIONS --------------------------------------------------------
+
+ # MASS CONFIGURATION INPUT IN LINE 1267 IN create_branch_ibps function! 
+
+ sector := [1,0,1,0,1]:
+
+ print("sector is", sector):
+ print("current mass configuration is: M1, M3, M5"):
+
+ solution := solve_sector(sector):
+ print("reduction equations are:", solution):
+ print("the number of reduction equations is:", nops(solution)):
+ 
+
+
+
+
