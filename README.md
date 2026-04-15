@@ -1,6 +1,6 @@
 # Master's Thesis Code Repository
 
-This repository contains the code, data, and results used in my Master's thesis titled Loop Reduction for Cosmological Correlators, which studies the one- and two-loop power spectrum of dark matter by means of IBP reduction.
+This repository contains the codes, data, and results used in my Master's thesis titled Loop Reduction for Cosmological Correlators, which studies the one- and two-loop power spectrum of dark matter by means of IBP reduction.
 
 The project is divided into two main parts:
 
