@@ -53,6 +53,9 @@ The 2-loop calculation is self-contained.
    ```
    read "IBP_solver_suncut.map":
    ```
+### Important note
+
+The mass configuration has to be modified in the `create_branch_ibps` function. 
 
 ---
 
